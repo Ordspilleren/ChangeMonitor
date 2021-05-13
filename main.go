@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/tidwall/gjson"
 )
 
 var wg = &sync.WaitGroup{}
@@ -23,13 +24,15 @@ type Config struct {
 }
 
 type Monitor struct {
-	URL         string        `json:"url"`
-	UseChrome   bool          `json:"useChrome"`
-	CSSSelector string        `json:"cssSelector"`
-	Interval    time.Duration `json:"interval"`
-	doneChannel chan bool
-	ticker      *time.Ticker
-	id          string
+	URL          string        `json:"url"`
+	HTTPHeaders  http.Header   `json:"httpHeaders,omitempty"`
+	UseChrome    bool          `json:"useChrome"`
+	CSSSelector  *string       `json:"cssSelector,omitempty"`
+	JSONSelector *string       `json:"jsonSelector,omitempty"`
+	Interval     time.Duration `json:"interval"`
+	doneChannel  chan bool
+	ticker       *time.Ticker
+	id           string
 }
 
 var config Config
@@ -89,14 +92,23 @@ func generateSHA1String(input string) string {
 func (m *Monitor) check() (err error) {
 	log.Print(m.URL)
 
-	if m.UseChrome {
-		log.Print("Using Chrome backend")
+	responseBody := getHTTPBody(m.URL, m.HTTPHeaders)
+
+	var selectorContent string
+
+	if m.CSSSelector != nil {
+		selectorContent = getCSSSelectorContent(responseBody, *m.CSSSelector)
+	} else if m.JSONSelector != nil {
+		selectorContent = getJSONSelectorContent(responseBody, *m.JSONSelector)
 	} else {
-		var headers http.Header
-		responseBody := getHTTPBody(m.URL, headers)
-		selectorContent := getCSSSelectorContent(responseBody, m.CSSSelector)
-		compareContent(m.id, selectorContent)
+		bodyBytes, err := ioutil.ReadAll(responseBody)
+		if err != nil {
+			log.Fatal(err)
+		}
+		selectorContent = string(bodyBytes)
 	}
+
+	compareContent(m.id, selectorContent)
 
 	return
 }
@@ -115,7 +127,6 @@ func getHTTPBody(url string, headers http.Header) io.ReadCloser {
 	if err != nil {
 		log.Fatal(err)
 	}
-	//defer response.Body.Close()
 
 	return response.Body
 }
@@ -131,7 +142,32 @@ func getCSSSelectorContent(body io.ReadCloser, selector string) string {
 	return selectorText
 }
 
+func getJSONSelectorContent(body io.ReadCloser, selector string) string {
+	bodyBytes, err := ioutil.ReadAll(body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	jsonValue := gjson.GetBytes(bodyBytes, selector)
+	return jsonValue.String()
+}
+
 func compareContent(monitorId string, content string) {
+	cacheContent := getCacheContent(monitorId)
+
+	log.Print("Cache content: " + cacheContent)
+	log.Print("New content: " + content)
+
+	if cacheContent == content {
+		log.Print("No changes.")
+		return
+	} else {
+		log.Print("Content has changed!")
+		writeCacheContent(monitorId, content)
+	}
+}
+
+func getCacheContent(monitorId string) string {
 	dataDir := "data"
 	filePath := filepath.Join(dataDir, monitorId)
 
@@ -140,23 +176,20 @@ func compareContent(monitorId string, content string) {
 	fileData, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err := ioutil.WriteFile(filePath, []byte(content), 0644)
-			if err != nil {
-				log.Panic(err)
-			}
-			log.Print("File did not exist, creating and doing nothing...")
-			return
+			log.Print("File did not exist, returning empty string.")
+			return ""
 		}
 	}
 
-	if string(fileData) == content {
-		log.Print("No changes.")
-		return
-	} else {
-		log.Print("Content has changed!")
-		err := ioutil.WriteFile(filePath, []byte(content), 0644)
-		if err != nil {
-			log.Panic(err)
-		}
+	return string(fileData)
+}
+
+func writeCacheContent(monitorId string, content string) {
+	dataDir := "data"
+	filePath := filepath.Join(dataDir, monitorId)
+
+	err := ioutil.WriteFile(filePath, []byte(content), 0644)
+	if err != nil {
+		log.Panic(err)
 	}
 }
