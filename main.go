@@ -46,7 +46,7 @@ func init() {
 }
 
 func main() {
-	config.Monitors.StartMonitoring()
+	config.Monitors.StartMonitoring(wg, notifiers)
 
 	wg.Wait()
 }

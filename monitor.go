@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -35,8 +36,9 @@ type Monitor struct {
 	doneChannel chan bool
 	ticker      *time.Ticker
 	id          string
-	notify      *notify.Notify
+	notifier    *notify.Notify
 	client      MonitorClient
+	storage     *Storage
 }
 
 type Selectors struct {
@@ -46,36 +48,49 @@ type Selectors struct {
 
 type Monitors []Monitor
 
-func (m Monitors) StartMonitoring() {
-	for idx := range m {
-		m[idx].id = generateSHA1String(m[idx].URL)
-		m[idx].doneChannel = make(chan bool)
-		m[idx].ticker = time.NewTicker(m[idx].Interval * time.Second)
+func (m *Monitor) Init(notifierMap NotifierMap) {
+	m.id = generateSHA1String(m.URL)
+	m.doneChannel = make(chan bool)
+	m.ticker = time.NewTicker(m.Interval * time.Minute)
+	m.storage = InitStorage(m.id)
 
-		m[idx].notify = notify.New()
+	m.notifier = notify.New()
 
-		for _, notifier := range m[idx].Notifiers {
-			m[idx].notify.UseServices(notifiers[notifier])
-		}
+	for _, notifier := range m.Notifiers {
+		m.notifier.UseServices(notifierMap[notifier])
+	}
 
-		if m[idx].UseChrome {
+	if m.UseChrome {
 
-		} else {
-			m[idx].client = HttpClient{}
-		}
+	} else {
+		m.client = HttpClient{}
+	}
+}
 
-		wg.Add(1)
-		go func(monitor Monitor) {
-			for {
-				select {
-				case <-monitor.doneChannel:
-					wg.Done()
-					return
-				case <-monitor.ticker.C:
-					monitor.check()
-				}
+func (m *Monitor) Start(wg *sync.WaitGroup) {
+	wg.Add(1)
+	go func(monitor *Monitor) {
+		monitor.check()
+		for {
+			select {
+			case <-monitor.doneChannel:
+				wg.Done()
+				return
+			case <-monitor.ticker.C:
+				monitor.check()
 			}
-		}(m[idx])
+		}
+	}(m)
+}
+
+func (m *Monitor) Stop() {
+	m.doneChannel <- true
+}
+
+func (m Monitors) StartMonitoring(wg *sync.WaitGroup, notifierMap NotifierMap) {
+	for idx := range m {
+		m[idx].Init(notifierMap)
+		m[idx].Start(wg)
 	}
 }
 
@@ -91,12 +106,10 @@ func (m *Monitor) check() {
 
 	selectorContent := m.client.GetContent(m.URL, m.HTTPHeaders, m.Selectors)
 
-	storage := InitStorage(m)
-
-	if m.compareContent(storage, selectorContent[0]) {
+	if m.compareContent(m.storage, selectorContent[0]) {
 		log.Print("Content has changed!")
 	} else {
-		_ = m.notify.Send(
+		_ = m.notifier.Send(
 			context.Background(),
 			"Test Subject",
 			"Test Message!",

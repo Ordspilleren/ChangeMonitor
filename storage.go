@@ -8,15 +8,15 @@ import (
 )
 
 type Storage struct {
-	Monitor *Monitor
+	ID string
 }
 
-func InitStorage(m *Monitor) *Storage {
-	return &Storage{Monitor: m}
+func InitStorage(id string) *Storage {
+	return &Storage{ID: id}
 }
 
 func (s *Storage) GetContent() string {
-	filePath := filepath.Join(config.StorageDirectory, s.Monitor.id)
+	filePath := filepath.Join(config.StorageDirectory, s.ID)
 
 	os.Mkdir(config.StorageDirectory, os.ModePerm)
 
@@ -33,7 +33,7 @@ func (s *Storage) GetContent() string {
 
 func (s *Storage) WriteContent(content string) {
 	dataDir := "data"
-	filePath := filepath.Join(dataDir, s.Monitor.id)
+	filePath := filepath.Join(dataDir, s.ID)
 
 	err := ioutil.WriteFile(filePath, []byte(content), 0644)
 	if err != nil {
