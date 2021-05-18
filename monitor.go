@@ -15,18 +15,33 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+type MonitorClient interface {
+	GetContent(url string, httpHeaders http.Header, selectors Selectors) []string
+}
+
+type ChromeClient struct {
+}
+
+type HttpClient struct {
+}
+
 type Monitor struct {
-	URL          string        `json:"url"`
-	HTTPHeaders  http.Header   `json:"httpHeaders,omitempty"`
-	UseChrome    bool          `json:"useChrome"`
-	CSSSelector  *string       `json:"cssSelector,omitempty"`
-	JSONSelector *string       `json:"jsonSelector,omitempty"`
-	Interval     time.Duration `json:"interval"`
-	Notifiers    []string      `json:"notifiers"`
-	doneChannel  chan bool
-	ticker       *time.Ticker
-	id           string
-	notify       *notify.Notify
+	URL         string        `json:"url"`
+	HTTPHeaders http.Header   `json:"httpHeaders,omitempty"`
+	UseChrome   bool          `json:"useChrome"`
+	Selectors   Selectors     `json:"selectors,omitempty"`
+	Interval    time.Duration `json:"interval"`
+	Notifiers   []string      `json:"notifiers"`
+	doneChannel chan bool
+	ticker      *time.Ticker
+	id          string
+	notify      *notify.Notify
+	client      MonitorClient
+}
+
+type Selectors struct {
+	CSS  *string `json:"css,omitempty"`
+	JSON *string `json:"json,omitempty"`
 }
 
 type Monitors []Monitor
@@ -41,6 +56,12 @@ func (m Monitors) StartMonitoring() {
 
 		for _, notifier := range m[idx].Notifiers {
 			m[idx].notify.UseServices(notifiers[notifier])
+		}
+
+		if m[idx].UseChrome {
+
+		} else {
+			m[idx].client = HttpClient{}
 		}
 
 		wg.Add(1)
@@ -68,25 +89,11 @@ func generateSHA1String(input string) string {
 func (m *Monitor) check() {
 	log.Print(m.URL)
 
-	responseBody := getHTTPBody(m.URL, m.HTTPHeaders)
-
-	var selectorContent string
-
-	if m.CSSSelector != nil {
-		selectorContent = getCSSSelectorContent(responseBody, *m.CSSSelector)
-	} else if m.JSONSelector != nil {
-		selectorContent = getJSONSelectorContent(responseBody, *m.JSONSelector)
-	} else {
-		bodyBytes, err := ioutil.ReadAll(responseBody)
-		if err != nil {
-			log.Fatal(err)
-		}
-		selectorContent = string(bodyBytes)
-	}
+	selectorContent := m.client.GetContent(m.URL, m.HTTPHeaders, m.Selectors)
 
 	storage := InitStorage(m)
 
-	if m.compareContent(storage, selectorContent) {
+	if m.compareContent(storage, selectorContent[0]) {
 		log.Print("Content has changed!")
 	} else {
 		_ = m.notify.Send(
@@ -95,6 +102,25 @@ func (m *Monitor) check() {
 			"Test Message!",
 		)
 	}
+}
+
+func (h HttpClient) GetContent(url string, httpHeaders http.Header, selectors Selectors) []string {
+	responseBody := getHTTPBody(url, httpHeaders)
+
+	var selectorContent string
+
+	if selectors.CSS != nil {
+		selectorContent = getCSSSelectorContent(responseBody, *selectors.CSS)
+	} else if selectors.JSON != nil {
+		selectorContent = getJSONSelectorContent(responseBody, *selectors.JSON)
+	} else {
+		bodyBytes, err := ioutil.ReadAll(responseBody)
+		if err != nil {
+			log.Fatal(err)
+		}
+		selectorContent = string(bodyBytes)
+	}
+	return []string{selectorContent}
 }
 
 func getHTTPBody(url string, headers http.Header) io.ReadCloser {
