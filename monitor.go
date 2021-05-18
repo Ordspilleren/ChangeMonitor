@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha1"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/nikoksr/notify"
 	"github.com/tidwall/gjson"
 )
 
@@ -20,9 +22,11 @@ type Monitor struct {
 	CSSSelector  *string       `json:"cssSelector,omitempty"`
 	JSONSelector *string       `json:"jsonSelector,omitempty"`
 	Interval     time.Duration `json:"interval"`
+	Notifiers    []string      `json:"notifiers"`
 	doneChannel  chan bool
 	ticker       *time.Ticker
 	id           string
+	notify       *notify.Notify
 }
 
 type Monitors []Monitor
@@ -32,6 +36,13 @@ func (m Monitors) StartMonitoring() {
 		m[idx].id = generateSHA1String(m[idx].URL)
 		m[idx].doneChannel = make(chan bool)
 		m[idx].ticker = time.NewTicker(m[idx].Interval * time.Second)
+
+		m[idx].notify = notify.New()
+
+		for _, notifier := range m[idx].Notifiers {
+			m[idx].notify.UseServices(notifiers[notifier])
+		}
+
 		wg.Add(1)
 		go func(monitor Monitor) {
 			for {
@@ -77,6 +88,12 @@ func (m *Monitor) check() {
 
 	if m.compareContent(storage, selectorContent) {
 		log.Print("Content has changed!")
+	} else {
+		_ = m.notify.Send(
+			context.Background(),
+			"Test Subject",
+			"Test Message!",
+		)
 	}
 }
 

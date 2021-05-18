@@ -13,10 +13,12 @@ var wg = &sync.WaitGroup{}
 type Config struct {
 	ConfigFile       string
 	StorageDirectory string
-	Monitors         Monitors `json:"monitors"`
+	Monitors         Monitors  `json:"monitors"`
+	Notifiers        Notifiers `json:"notifiers"`
 }
 
 var config Config
+var notifiers NotifierMap
 
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
@@ -39,6 +41,8 @@ func init() {
 		log.Print(err)
 		return
 	}
+
+	notifiers = config.Notifiers.InitNotifiers()
 }
 
 func main() {
