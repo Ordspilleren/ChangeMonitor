@@ -30,6 +30,8 @@ func getEnv(key, fallback string) string {
 func init() {
 	config.ConfigFile = getEnv("CONFIG_FILE", "config.json")
 	config.StorageDirectory = getEnv("STORAGE_DIRECTORY", "data")
+	log.Printf("Config File: %s", config.ConfigFile)
+	log.Printf("Storage Directory: %s", config.StorageDirectory)
 
 	b, err := ioutil.ReadFile(config.ConfigFile)
 	if err != nil {

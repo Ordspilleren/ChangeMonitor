@@ -27,6 +27,7 @@ type HttpClient struct {
 }
 
 type Monitor struct {
+	Name        string        `json:"name"`
 	URL         string        `json:"url"`
 	HTTPHeaders http.Header   `json:"httpHeaders,omitempty"`
 	UseChrome   bool          `json:"useChrome"`
@@ -98,22 +99,25 @@ func generateSHA1String(input string) string {
 	h := sha1.New()
 	h.Write([]byte(input))
 	bs := h.Sum(nil)
-	return fmt.Sprintf("%x\n", bs)
+	return fmt.Sprintf("%x", bs)
 }
 
 func (m *Monitor) check() {
 	log.Print(m.URL)
 
 	selectorContent := m.client.GetContent(m.URL, m.HTTPHeaders, m.Selectors)
+	storageContent := m.storage.GetContent()
 
-	if m.compareContent(m.storage, selectorContent[0]) {
+	if m.compareContent(storageContent, selectorContent[0]) {
+		m.storage.WriteContent(selectorContent[0])
 		log.Print("Content has changed!")
-	} else {
 		_ = m.notifier.Send(
 			context.Background(),
-			"Test Subject",
-			"Test Message!",
+			fmt.Sprintf("%s has changed!", m.Name),
+			fmt.Sprintf("New content: %s\nOld content: %s\nURL: %s", selectorContent[0], storageContent, m.URL),
 		)
+	} else {
+		log.Printf("Nothing has changed, waiting %s.", m.Interval*time.Minute)
 	}
 }
 
@@ -160,7 +164,7 @@ func getCSSSelectorContent(body io.ReadCloser, selector string) string {
 		log.Fatal(err)
 	}
 
-	selectorText := doc.Find(selector).First().Text()
+	selectorText := doc.Find(selector).Text()
 
 	return selectorText
 }
@@ -175,13 +179,11 @@ func getJSONSelectorContent(body io.ReadCloser, selector string) string {
 	return jsonValue.String()
 }
 
-func (m *Monitor) compareContent(storage *Storage, content string) bool {
-	storageContent := storage.GetContent()
-	log.Print("Cache content: " + storageContent)
-	log.Print("New content: " + content)
+func (m *Monitor) compareContent(storage string, selector string) bool {
+	log.Print("Cache content: " + storage)
+	log.Print("New content: " + selector)
 
-	if storageContent != content {
-		storage.WriteContent(content)
+	if storage != selector {
 		return true
 	}
 

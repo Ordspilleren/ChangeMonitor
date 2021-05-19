@@ -32,8 +32,7 @@ func (s *Storage) GetContent() string {
 }
 
 func (s *Storage) WriteContent(content string) {
-	dataDir := "data"
-	filePath := filepath.Join(dataDir, s.ID)
+	filePath := filepath.Join(config.StorageDirectory, s.ID)
 
 	err := ioutil.WriteFile(filePath, []byte(content), 0644)
 	if err != nil {
