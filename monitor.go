@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 )
 
 type MonitorClient interface {
-	GetContent(url string, httpHeaders http.Header, selectors Selectors) []string
+	GetContent(url string, httpHeaders http.Header, selectors Selectors) string
 }
 
 type ChromeClient struct {
@@ -43,8 +44,8 @@ type Monitor struct {
 }
 
 type Selectors struct {
-	CSS  *string `json:"css,omitempty"`
-	JSON *string `json:"json,omitempty"`
+	CSS  *string   `json:"css,omitempty"`
+	JSON *[]string `json:"json,omitempty"`
 }
 
 type Monitors []Monitor
@@ -108,20 +109,20 @@ func (m *Monitor) check() {
 	selectorContent := m.client.GetContent(m.URL, m.HTTPHeaders, m.Selectors)
 	storageContent := m.storage.GetContent()
 
-	if m.compareContent(storageContent, selectorContent[0]) {
-		m.storage.WriteContent(selectorContent[0])
+	if m.compareContent(storageContent, selectorContent) {
+		m.storage.WriteContent(selectorContent)
 		log.Print("Content has changed!")
 		_ = m.notifier.Send(
 			context.Background(),
 			fmt.Sprintf("%s has changed!", m.Name),
-			fmt.Sprintf("New content: %s\nOld content: %s\nURL: %s", selectorContent[0], storageContent, m.URL),
+			fmt.Sprintf("New content: %.200s\nOld content: %.200s\nURL: %s", selectorContent, storageContent, m.URL),
 		)
 	} else {
 		log.Printf("Nothing has changed, waiting %s.", m.Interval*time.Minute)
 	}
 }
 
-func (h HttpClient) GetContent(url string, httpHeaders http.Header, selectors Selectors) []string {
+func (h HttpClient) GetContent(url string, httpHeaders http.Header, selectors Selectors) string {
 	responseBody := getHTTPBody(url, httpHeaders)
 
 	var selectorContent string
@@ -131,13 +132,10 @@ func (h HttpClient) GetContent(url string, httpHeaders http.Header, selectors Se
 	} else if selectors.JSON != nil {
 		selectorContent = getJSONSelectorContent(responseBody, *selectors.JSON)
 	} else {
-		bodyBytes, err := ioutil.ReadAll(responseBody)
-		if err != nil {
-			log.Fatal(err)
-		}
-		selectorContent = string(bodyBytes)
+		selectorContent = getHTMLText(responseBody)
 	}
-	return []string{selectorContent}
+
+	return selectorContent
 }
 
 func getHTTPBody(url string, headers http.Header) io.ReadCloser {
@@ -164,28 +162,41 @@ func getCSSSelectorContent(body io.ReadCloser, selector string) string {
 		log.Fatal(err)
 	}
 
-	selectorText := doc.Find(selector).Text()
+	result := doc.Find(selector).Text()
 
-	return selectorText
+	return result
 }
 
-func getJSONSelectorContent(body io.ReadCloser, selector string) string {
+func getHTMLText(body io.ReadCloser) string {
+	doc, err := goquery.NewDocumentFromReader(body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	doc.Find("script").Remove()
+
+	return doc.Text()
+}
+
+func getJSONSelectorContent(body io.ReadCloser, selector []string) string {
 	bodyBytes, err := ioutil.ReadAll(body)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	jsonValue := gjson.GetBytes(bodyBytes, selector)
-	return jsonValue.String()
+	var results []string
+	result := gjson.GetManyBytes(bodyBytes, selector...)
+
+	for _, value := range result {
+		results = append(results, value.String())
+	}
+
+	return strings.Join(results, "")
 }
 
 func (m *Monitor) compareContent(storage string, selector string) bool {
-	log.Print("Cache content: " + storage)
-	log.Print("New content: " + selector)
+	log.Printf("Cache content: %s", storage)
+	log.Printf("New content: %s", selector)
 
-	if storage != selector {
-		return true
-	}
-
-	return false
+	return storage != selector
 }
