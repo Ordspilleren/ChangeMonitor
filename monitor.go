@@ -44,7 +44,7 @@ type Monitor struct {
 }
 
 type Selectors struct {
-	CSS  *string   `json:"css,omitempty"`
+	CSS  *[]string `json:"css,omitempty"`
 	JSON *[]string `json:"json,omitempty"`
 }
 
@@ -114,8 +114,8 @@ func (m *Monitor) check() {
 		log.Print("Content has changed!")
 		_ = m.notifier.Send(
 			context.Background(),
-			fmt.Sprintf("%s has changed!", m.Name),
-			fmt.Sprintf("New content: %.200s\nOld content: %.200s\nURL: %s", selectorContent, storageContent, m.URL),
+			fmt.Sprintf("<b><u>%s has changed!</u></b>", m.Name),
+			fmt.Sprintf("<b>New content:</b>\n%.200s\n\n<b>Old content:</b>\n%.200s\n\n<b>URL:</b> %s", selectorContent, storageContent, m.URL),
 		)
 	} else {
 		log.Printf("Nothing has changed, waiting %s.", m.Interval*time.Minute)
@@ -156,15 +156,18 @@ func getHTTPBody(url string, headers http.Header) io.ReadCloser {
 	return response.Body
 }
 
-func getCSSSelectorContent(body io.ReadCloser, selector string) string {
+func getCSSSelectorContent(body io.ReadCloser, selectors []string) string {
 	doc, err := goquery.NewDocumentFromReader(body)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	result := doc.Find(selector).Text()
+	var results []string
+	for _, selector := range selectors {
+		results = append(results, doc.Find(selector).Text())
+	}
 
-	return result
+	return strings.Join(results, "\n")
 }
 
 func getHTMLText(body io.ReadCloser) string {
@@ -178,20 +181,20 @@ func getHTMLText(body io.ReadCloser) string {
 	return doc.Text()
 }
 
-func getJSONSelectorContent(body io.ReadCloser, selector []string) string {
+func getJSONSelectorContent(body io.ReadCloser, selectors []string) string {
 	bodyBytes, err := ioutil.ReadAll(body)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	var results []string
-	result := gjson.GetManyBytes(bodyBytes, selector...)
+	result := gjson.GetManyBytes(bodyBytes, selectors...)
 
 	for _, value := range result {
 		results = append(results, value.String())
 	}
 
-	return strings.Join(results, "")
+	return strings.Join(results, "\n")
 }
 
 func (m *Monitor) compareContent(storage string, selector string) bool {
