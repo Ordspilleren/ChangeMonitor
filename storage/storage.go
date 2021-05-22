@@ -1,4 +1,4 @@
-package main
+package storage
 
 import (
 	"io/ioutil"
@@ -8,17 +8,18 @@ import (
 )
 
 type Storage struct {
-	ID string
+	ID        string
+	Directory string
 }
 
-func InitStorage(id string) *Storage {
-	return &Storage{ID: id}
+func InitStorage(id string, directory string) *Storage {
+	return &Storage{ID: id, Directory: directory}
 }
 
 func (s *Storage) GetContent() string {
-	filePath := filepath.Join(config.StorageDirectory, s.ID)
+	filePath := filepath.Join(s.Directory, s.ID)
 
-	os.Mkdir(config.StorageDirectory, os.ModePerm)
+	os.Mkdir(s.Directory, os.ModePerm)
 
 	fileData, err := ioutil.ReadFile(filePath)
 	if err != nil {
@@ -32,7 +33,7 @@ func (s *Storage) GetContent() string {
 }
 
 func (s *Storage) WriteContent(content string) {
-	filePath := filepath.Join(config.StorageDirectory, s.ID)
+	filePath := filepath.Join(s.Directory, s.ID)
 
 	err := ioutil.WriteFile(filePath, []byte(content), 0644)
 	if err != nil {

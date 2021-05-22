@@ -1,4 +1,4 @@
-package main
+package monitor
 
 import (
 	"context"
@@ -12,8 +12,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Ordspilleren/ChangeMonitor/notify"
+	"github.com/Ordspilleren/ChangeMonitor/storage"
 	"github.com/PuerkitoBio/goquery"
-	"github.com/nikoksr/notify"
 	"github.com/tidwall/gjson"
 )
 
@@ -38,9 +39,9 @@ type Monitor struct {
 	doneChannel chan bool
 	ticker      *time.Ticker
 	id          string
-	notifier    *notify.Notify
+	notifiers   notify.NotifierList
 	client      MonitorClient
-	storage     *Storage
+	storage     *storage.Storage
 }
 
 type Selectors struct {
@@ -50,16 +51,14 @@ type Selectors struct {
 
 type Monitors []Monitor
 
-func (m *Monitor) Init(notifierMap NotifierMap) {
+func (m *Monitor) Init(notifierMap notify.NotifierMap, storageDirectory string) {
 	m.id = generateSHA1String(m.URL)
 	m.doneChannel = make(chan bool)
 	m.ticker = time.NewTicker(m.Interval * time.Minute)
-	m.storage = InitStorage(m.id)
-
-	m.notifier = notify.New()
+	m.storage = storage.InitStorage(m.id, storageDirectory)
 
 	for _, notifier := range m.Notifiers {
-		m.notifier.UseServices(notifierMap[notifier])
+		m.notifiers = append(m.notifiers, notifierMap[notifier])
 	}
 
 	if m.UseChrome {
@@ -89,9 +88,9 @@ func (m *Monitor) Stop() {
 	m.doneChannel <- true
 }
 
-func (m Monitors) StartMonitoring(wg *sync.WaitGroup, notifierMap NotifierMap) {
+func (m Monitors) StartMonitoring(wg *sync.WaitGroup, notifierMap notify.NotifierMap, storageDirectory string) {
 	for idx := range m {
-		m[idx].Init(notifierMap)
+		m[idx].Init(notifierMap, storageDirectory)
 		m[idx].Start(wg)
 	}
 }
@@ -112,7 +111,7 @@ func (m *Monitor) check() {
 	if m.compareContent(storageContent, selectorContent) {
 		m.storage.WriteContent(selectorContent)
 		log.Print("Content has changed!")
-		_ = m.notifier.Send(
+		_ = m.notifiers.Send(
 			context.Background(),
 			fmt.Sprintf("<b><u>%s has changed!</u></b>", m.Name),
 			fmt.Sprintf("<b>New content:</b>\n%.200s\n\n<b>Old content:</b>\n%.200s\n\n<b>URL:</b> %s", selectorContent, storageContent, m.URL),

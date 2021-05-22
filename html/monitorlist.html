@@ -1,0 +1,27 @@
+{{define "content"}}
+<table class="table is-striped">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>URL</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Monitors}}
+        <tr>
+            <td>{{.Name}}</td>
+            <td><a
+                    href="{{.URL}}">{{.URL}}</a>
+            </td>
+            <td>
+                <div class="buttons">
+                    <button class="button is-small is-primary">Primary</button>
+                    <button class="button is-small is-danger">Link</button>
+                </div>
+            </td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{end}}
