@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"crypto/sha1"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -19,7 +20,7 @@ import (
 )
 
 type MonitorClient interface {
-	GetContent(url string, httpHeaders http.Header, selectors Selectors) string
+	GetContent(url string, httpHeaders http.Header, selectors Selectors) (string, error)
 }
 
 type ChromeClient struct {
@@ -132,7 +133,11 @@ func generateSHA1String(input string) string {
 func (m *Monitor) check() {
 	log.Print(m.URL)
 
-	selectorContent := m.client.GetContent(m.URL, m.HTTPHeaders, m.Selectors)
+	selectorContent, err := m.client.GetContent(m.URL, m.HTTPHeaders, m.Selectors)
+	if err != nil {
+		log.Print(err)
+		return
+	}
 	storageContent := m.storage.GetContent()
 
 	if m.compareContent(storageContent, selectorContent) {
@@ -148,8 +153,11 @@ func (m *Monitor) check() {
 	}
 }
 
-func (h HttpClient) GetContent(url string, httpHeaders http.Header, selectors Selectors) string {
-	responseBody := getHTTPBody(url, httpHeaders)
+func (h HttpClient) GetContent(url string, httpHeaders http.Header, selectors Selectors) (string, error) {
+	responseBody, err := getHTTPBody(url, httpHeaders)
+	if err != nil {
+		return "", err
+	}
 
 	var selectorContent string
 
@@ -161,25 +169,29 @@ func (h HttpClient) GetContent(url string, httpHeaders http.Header, selectors Se
 		selectorContent = getHTMLText(responseBody)
 	}
 
-	return selectorContent
+	return selectorContent, nil
 }
 
-func getHTTPBody(url string, headers http.Header) io.ReadCloser {
+func getHTTPBody(url string, headers http.Header) (io.ReadCloser, error) {
 	httpClient := http.Client{}
 
 	request, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to create new request: %v", err)
 	}
 
 	request.Header = headers
 
 	response, err := httpClient.Do(request)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to complete HTTP request: %v", err)
 	}
 
-	return response.Body
+	if response.StatusCode != 200 {
+		return nil, errors.New("http response is not 200 OK")
+	}
+
+	return response.Body, nil
 }
 
 func getCSSSelectorContent(body io.ReadCloser, selectors []string) string {
