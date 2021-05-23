@@ -1,0 +1,43 @@
+{{define "content"}}
+{{if .Success}}
+<div class="notification is-success">
+    <button class="delete"></button>
+    Monitor added successfully!
+</div>
+{{end}}
+<form method="POST">
+    <div class="field">
+        <label class="label">Name</label>
+        <div class="control">
+            <input name="name" class="input" type="text" placeholder="Text input">
+        </div>
+    </div>
+
+    <div class="field">
+        <label class="label">URL</label>
+        <div class="control">
+            <input name="url" class="input" type="text" placeholder="Text input">
+        </div>
+    </div>
+
+    <div class="field">
+        <label class="label">Interval</label>
+        <div class="control">
+            <input name="interval" class="input" type="number" placeholder="Text input">
+        </div>
+    </div>
+
+    <div class="field">
+        <label class="label">Notifiers</label>
+        <div class="control">
+            <input name="notifier" class="input" type="text" placeholder="Text input">
+        </div>
+    </div>
+
+    <div class="field is-grouped">
+        <div class="control">
+            <input type="submit" class="button is-link"></input>
+        </div>
+    </div>
+</form>
+{{end}}

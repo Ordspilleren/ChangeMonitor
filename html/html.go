@@ -17,14 +17,24 @@ var assets embed.FS
 
 var (
 	monitorList = parse("monitorlist.html")
+	monitorNew  = parse("monitornew.html")
 )
 
 type MonitorListParams struct {
 	Monitors *monitor.Monitors
 }
 
+type MonitorNewParams struct {
+	Monitor *monitor.Monitor
+	Success bool
+}
+
 func MonitorList(w io.Writer, p MonitorListParams) error {
 	return monitorList.Execute(w, p)
+}
+
+func MonitorNew(w io.Writer, p MonitorNewParams) error {
+	return monitorNew.Execute(w, p)
 }
 
 func parse(file string) *template.Template {

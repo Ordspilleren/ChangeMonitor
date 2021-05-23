@@ -36,6 +36,7 @@ type Monitor struct {
 	Selectors   Selectors     `json:"selectors,omitempty"`
 	Interval    time.Duration `json:"interval"`
 	Notifiers   []string      `json:"notifiers"`
+	Started     bool
 	doneChannel chan bool
 	ticker      *time.Ticker
 	id          string
@@ -50,6 +51,18 @@ type Selectors struct {
 }
 
 type Monitors []Monitor
+
+func NewMonitor(name string, url string, interval int64, notifiers []string) *Monitor {
+	monitor := &Monitor{
+		Name:      name,
+		URL:       url,
+		UseChrome: false,
+		Interval:  time.Duration(interval),
+		Notifiers: notifiers,
+	}
+
+	return monitor
+}
 
 func (m *Monitor) Init(notifierMap notify.NotifierMap, storageDirectory string) {
 	m.id = generateSHA1String(m.URL)
@@ -70,6 +83,7 @@ func (m *Monitor) Init(notifierMap notify.NotifierMap, storageDirectory string) 
 
 func (m *Monitor) Start(wg *sync.WaitGroup) {
 	wg.Add(1)
+	m.Started = true
 	go func(monitor *Monitor) {
 		monitor.check()
 		for {
@@ -177,7 +191,7 @@ func getHTMLText(body io.ReadCloser) string {
 
 	doc.Find("script").Remove()
 
-	return doc.Text()
+	return doc.Find("body").Text()
 }
 
 func getJSONSelectorContent(body io.ReadCloser, selectors []string) string {

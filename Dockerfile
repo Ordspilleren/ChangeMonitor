@@ -11,4 +11,5 @@ FROM alpine
 COPY --from=build /app/out/app /usr/local/bin/changemonitor
 ENV CONFIG_FILE=/config/config.json
 ENV STORAGE_DIRECTORY=/data
+ENV ENABLE_WEBUI=false
 ENTRYPOINT ["/usr/local/bin/changemonitor"]

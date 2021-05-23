@@ -1,5 +1,6 @@
 {{define "content"}}
-<table class="table is-striped">
+<a href="/new" class="button is-primary is-medium is-fullwidth">New Monitor</a>
+<table class="table is-striped is-fullwidth">
     <thead>
         <tr>
             <th>Name</th>
@@ -8,17 +9,22 @@
         </tr>
     </thead>
     <tbody>
-        {{range .Monitors}}
+        {{range $index, $monitor := .Monitors}}
         <tr>
             <td>{{.Name}}</td>
-            <td><a
-                    href="{{.URL}}">{{.URL}}</a>
+            <td><a href="{{.URL}}">{{.URL}}</a>
             </td>
             <td>
-                <div class="buttons">
-                    <button class="button is-small is-primary">Primary</button>
-                    <button class="button is-small is-danger">Link</button>
-                </div>
+                <form method="POST">
+                    <input type="hidden" name="monitorid" value="{{$index}}"></input>
+                    <div class="buttons">
+                        {{if .Started}}
+                        <input type="submit" class="button is-small is-danger" name="stop" value="Stop"></input>
+                        {{else}}
+                        <input type="submit" class="button is-small is-primary" name="start" value="Start"></input>
+                        {{end}}
+                    </div>
+                </form>
             </td>
         </tr>
         {{end}}
