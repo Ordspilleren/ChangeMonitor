@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/Ordspilleren/ChangeMonitor/html"
@@ -16,12 +18,13 @@ import (
 
 var wg = &sync.WaitGroup{}
 
+var ConfigFile string
+var StorageDirectory string
+var EnableWebUI bool
+
 type Config struct {
-	ConfigFile       string
-	StorageDirectory string
-	EnableWebUI      bool
-	Monitors         monitor.Monitors `json:"monitors"`
-	Notifiers        notify.Notifiers `json:"notifiers"`
+	Monitors  monitor.Monitors `json:"monitors"`
+	Notifiers notify.Notifiers `json:"notifiers"`
 }
 
 var config Config
@@ -35,13 +38,13 @@ func getEnv(key, fallback string) string {
 }
 
 func init() {
-	config.ConfigFile = getEnv("CONFIG_FILE", "config.json")
-	config.StorageDirectory = getEnv("STORAGE_DIRECTORY", "data")
-	config.EnableWebUI, _ = strconv.ParseBool(getEnv("ENABLE_WEBUI", "true"))
-	log.Printf("Config File: %s", config.ConfigFile)
-	log.Printf("Storage Directory: %s", config.StorageDirectory)
+	ConfigFile = getEnv("CONFIG_FILE", "config.json")
+	StorageDirectory = getEnv("STORAGE_DIRECTORY", "data")
+	EnableWebUI, _ = strconv.ParseBool(getEnv("ENABLE_WEBUI", "true"))
+	log.Printf("Config File: %s", ConfigFile)
+	log.Printf("Storage Directory: %s", StorageDirectory)
 
-	b, err := ioutil.ReadFile(config.ConfigFile)
+	b, err := ioutil.ReadFile(ConfigFile)
 	if err != nil {
 		log.Print(err)
 		return
@@ -56,13 +59,22 @@ func init() {
 }
 
 func main() {
-	config.Monitors.StartMonitoring(wg, notifierMap, config.StorageDirectory)
+	config.Monitors.StartMonitoring(wg, notifierMap, StorageDirectory)
 
-	if config.EnableWebUI {
+	if EnableWebUI {
 		startHTTPServer()
 	} else {
 		wg.Wait()
 	}
+}
+
+func (t *Config) JSON() ([]byte, error) {
+	buffer := &bytes.Buffer{}
+	encoder := json.NewEncoder(buffer)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "\t")
+	err := encoder.Encode(t)
+	return buffer.Bytes(), err
 }
 
 func startHTTPServer() {
@@ -97,6 +109,12 @@ func monitorList(w http.ResponseWriter, r *http.Request) {
 func monitorNew(w http.ResponseWriter, r *http.Request) {
 	p := html.MonitorNewParams{}
 
+	monitorID := r.URL.Query().Get("id")
+	if monitorID != "" {
+		id, _ := strconv.ParseInt(monitorID, 10, 64)
+		p.Monitor = &config.Monitors[id]
+	}
+
 	if r.Method != http.MethodPost {
 		html.MonitorNew(w, p)
 		return
@@ -108,14 +126,32 @@ func monitorNew(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Print(err)
 	}
+	cssSelectors := r.FormValue("cssselectors")
+	jsonSelectors := r.FormValue("jsonselectors")
 	notifiers := r.Form["notifier"]
 
 	monitor := monitor.NewMonitor(name, url, interval, notifiers)
-	monitor.Init(notifierMap, config.StorageDirectory)
+
+	if cssSelectors != "" {
+		cssSelectorSlice := strings.Split(cssSelectors, "\n")
+		monitor.AddCSSSelectors(cssSelectorSlice...)
+	}
+	if jsonSelectors != "" {
+		jsonSelectorSlice := strings.Split(jsonSelectors, "\n")
+		monitor.AddCSSSelectors(jsonSelectorSlice...)
+	}
+
+	monitor.Init(notifierMap, StorageDirectory)
 
 	p.Success = true
 
 	config.Monitors = append(config.Monitors, *monitor)
+
+	newConfig, _ := config.JSON()
+	err = ioutil.WriteFile(ConfigFile, newConfig, 0644)
+	if err != nil {
+		log.Print(err)
+	}
 
 	html.MonitorNew(w, p)
 }

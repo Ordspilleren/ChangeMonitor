@@ -35,8 +35,8 @@ type Monitor struct {
 	UseChrome   bool          `json:"useChrome"`
 	Selectors   Selectors     `json:"selectors,omitempty"`
 	Interval    time.Duration `json:"interval"`
-	Notifiers   []string      `json:"notifiers"`
-	Started     bool
+	Notifiers   []string      `json:"notifiers,omitempty"`
+	started     bool
 	doneChannel chan bool
 	ticker      *time.Ticker
 	id          string
@@ -64,6 +64,14 @@ func NewMonitor(name string, url string, interval int64, notifiers []string) *Mo
 	return monitor
 }
 
+func (m *Monitor) AddCSSSelectors(selectors ...string) {
+	m.Selectors.CSS = &selectors
+}
+
+func (m *Monitor) AddJSONSelectors(selectors ...string) {
+	m.Selectors.JSON = &selectors
+}
+
 func (m *Monitor) Init(notifierMap notify.NotifierMap, storageDirectory string) {
 	m.id = generateSHA1String(m.URL)
 	m.doneChannel = make(chan bool)
@@ -83,13 +91,14 @@ func (m *Monitor) Init(notifierMap notify.NotifierMap, storageDirectory string) 
 
 func (m *Monitor) Start(wg *sync.WaitGroup) {
 	wg.Add(1)
-	m.Started = true
+	m.started = true
 	go func(monitor *Monitor) {
 		monitor.check()
 		for {
 			select {
 			case <-monitor.doneChannel:
 				wg.Done()
+				m.started = false
 				return
 			case <-monitor.ticker.C:
 				monitor.check()
@@ -100,6 +109,10 @@ func (m *Monitor) Start(wg *sync.WaitGroup) {
 
 func (m *Monitor) Stop() {
 	m.doneChannel <- true
+}
+
+func (m *Monitor) IsRunning() bool {
+	return m.started
 }
 
 func (m Monitors) StartMonitoring(wg *sync.WaitGroup, notifierMap notify.NotifierMap, storageDirectory string) {

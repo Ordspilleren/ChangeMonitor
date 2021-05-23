@@ -18,7 +18,7 @@
                 <form method="POST">
                     <input type="hidden" name="monitorid" value="{{$index}}"></input>
                     <div class="buttons">
-                        {{if .Started}}
+                        {{if .IsRunning}}
                         <input type="submit" class="button is-small is-danger" name="stop" value="Stop"></input>
                         {{else}}
                         <input type="submit" class="button is-small is-primary" name="start" value="Start"></input>
