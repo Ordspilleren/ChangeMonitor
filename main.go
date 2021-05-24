@@ -20,6 +20,7 @@ var wg = &sync.WaitGroup{}
 
 var ConfigFile string
 var StorageDirectory string
+var ChromePath string
 var EnableWebUI bool
 
 type Config struct {
@@ -40,6 +41,7 @@ func getEnv(key, fallback string) string {
 func init() {
 	ConfigFile = getEnv("CONFIG_FILE", "config.json")
 	StorageDirectory = getEnv("STORAGE_DIRECTORY", "data")
+	ChromePath = getEnv("CHROME_PATH", "/usr/bin/chromium")
 	EnableWebUI, _ = strconv.ParseBool(getEnv("ENABLE_WEBUI", "true"))
 	log.Printf("Config File: %s", ConfigFile)
 	log.Printf("Storage Directory: %s", StorageDirectory)
@@ -59,7 +61,7 @@ func init() {
 }
 
 func main() {
-	config.Monitors.StartMonitoring(wg, notifierMap, StorageDirectory)
+	config.Monitors.StartMonitoring(wg, notifierMap, StorageDirectory, ChromePath)
 
 	if EnableWebUI {
 		startHTTPServer()
@@ -141,7 +143,7 @@ func monitorNew(w http.ResponseWriter, r *http.Request) {
 		monitor.AddCSSSelectors(jsonSelectorSlice...)
 	}
 
-	monitor.Init(notifierMap, StorageDirectory)
+	monitor.Init(notifierMap, StorageDirectory, ChromePath)
 
 	p.Success = true
 

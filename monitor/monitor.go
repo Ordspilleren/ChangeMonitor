@@ -16,6 +16,9 @@ import (
 	"github.com/Ordspilleren/ChangeMonitor/notify"
 	"github.com/Ordspilleren/ChangeMonitor/storage"
 	"github.com/PuerkitoBio/goquery"
+	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/launcher"
+	"github.com/go-rod/rod/lib/proto"
 	"github.com/tidwall/gjson"
 )
 
@@ -24,6 +27,7 @@ type MonitorClient interface {
 }
 
 type ChromeClient struct {
+	Path string
 }
 
 type HttpClient struct {
@@ -73,7 +77,7 @@ func (m *Monitor) AddJSONSelectors(selectors ...string) {
 	m.Selectors.JSON = &selectors
 }
 
-func (m *Monitor) Init(notifierMap notify.NotifierMap, storageDirectory string) {
+func (m *Monitor) Init(notifierMap notify.NotifierMap, storageDirectory string, chromePath string) {
 	m.id = generateSHA1String(m.URL)
 	m.doneChannel = make(chan bool)
 	m.ticker = time.NewTicker(m.Interval * time.Minute)
@@ -84,7 +88,7 @@ func (m *Monitor) Init(notifierMap notify.NotifierMap, storageDirectory string) 
 	}
 
 	if m.UseChrome {
-
+		m.client = ChromeClient{Path: chromePath}
 	} else {
 		m.client = HttpClient{}
 	}
@@ -116,9 +120,9 @@ func (m *Monitor) IsRunning() bool {
 	return m.started
 }
 
-func (m Monitors) StartMonitoring(wg *sync.WaitGroup, notifierMap notify.NotifierMap, storageDirectory string) {
+func (m Monitors) StartMonitoring(wg *sync.WaitGroup, notifierMap notify.NotifierMap, storageDirectory string, chromePath string) {
 	for idx := range m {
-		m[idx].Init(notifierMap, storageDirectory)
+		m[idx].Init(notifierMap, storageDirectory, chromePath)
 		m[idx].Start(wg)
 	}
 }
@@ -158,6 +162,7 @@ func (h HttpClient) GetContent(url string, httpHeaders http.Header, selectors Se
 	if err != nil {
 		return "", err
 	}
+	defer responseBody.Close()
 
 	var selectorContent string
 
@@ -249,4 +254,51 @@ func (m *Monitor) compareContent(storage string, selector string) bool {
 	log.Printf("New content: %s", selector)
 
 	return storage != selector
+}
+
+func (h ChromeClient) GetContent(url string, httpHeaders http.Header, selectors Selectors) (string, error) {
+	browser, err := launcher.New().Bin(h.Path).Launch()
+	if err != nil {
+		return "", fmt.Errorf("failed to launch browser: %v", err)
+	}
+	rod := rod.New().ControlURL(browser)
+	err = rod.Connect()
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to browser: %v", err)
+	}
+	page, err := rod.Page(proto.TargetCreateTarget{URL: url})
+	if err != nil {
+		return "", fmt.Errorf("unable to connect to url: %v", err)
+	}
+	wait := page.MustWaitRequestIdle()
+	wait()
+	pageContent, err := page.HTML()
+	if err != nil {
+		return "", fmt.Errorf("unable to fetch html content: %v", err)
+	}
+
+	reader := strings.NewReader(pageContent)
+	readCloser := io.NopCloser(reader)
+	defer readCloser.Close()
+
+	var selectorContent string
+
+	if selectors.CSS != nil {
+		selectorContent, err = getCSSSelectorContent(readCloser, *selectors.CSS)
+		if err != nil {
+			return "", err
+		}
+	} else if selectors.JSON != nil {
+		selectorContent, err = getJSONSelectorContent(readCloser, *selectors.JSON)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		selectorContent, err = getHTMLText(readCloser)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return selectorContent, nil
 }
