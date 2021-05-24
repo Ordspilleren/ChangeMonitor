@@ -162,11 +162,20 @@ func (h HttpClient) GetContent(url string, httpHeaders http.Header, selectors Se
 	var selectorContent string
 
 	if selectors.CSS != nil {
-		selectorContent = getCSSSelectorContent(responseBody, *selectors.CSS)
+		selectorContent, err = getCSSSelectorContent(responseBody, *selectors.CSS)
+		if err != nil {
+			return "", err
+		}
 	} else if selectors.JSON != nil {
-		selectorContent = getJSONSelectorContent(responseBody, *selectors.JSON)
+		selectorContent, err = getJSONSelectorContent(responseBody, *selectors.JSON)
+		if err != nil {
+			return "", err
+		}
 	} else {
-		selectorContent = getHTMLText(responseBody)
+		selectorContent, err = getHTMLText(responseBody)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	return selectorContent, nil
@@ -184,20 +193,20 @@ func getHTTPBody(url string, headers http.Header) (io.ReadCloser, error) {
 
 	response, err := httpClient.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("failed to complete HTTP request: %v", err)
+		return nil, fmt.Errorf("failed to complete http request: %v", err)
 	}
 
 	if response.StatusCode != 200 {
-		return nil, errors.New("http response is not 200 OK")
+		return nil, errors.New("http response is not 200 ok")
 	}
 
 	return response.Body, nil
 }
 
-func getCSSSelectorContent(body io.ReadCloser, selectors []string) string {
+func getCSSSelectorContent(body io.ReadCloser, selectors []string) (string, error) {
 	doc, err := goquery.NewDocumentFromReader(body)
 	if err != nil {
-		log.Fatal(err)
+		return "", fmt.Errorf("failed to create goquery document: %v", err)
 	}
 
 	var results []string
@@ -205,24 +214,24 @@ func getCSSSelectorContent(body io.ReadCloser, selectors []string) string {
 		results = append(results, doc.Find(selector).Text())
 	}
 
-	return strings.Join(results, "\n")
+	return strings.Join(results, "\n"), nil
 }
 
-func getHTMLText(body io.ReadCloser) string {
+func getHTMLText(body io.ReadCloser) (string, error) {
 	doc, err := goquery.NewDocumentFromReader(body)
 	if err != nil {
-		log.Fatal(err)
+		return "", fmt.Errorf("failed to create goquery document: %v", err)
 	}
 
 	doc.Find("script").Remove()
 
-	return doc.Find("body").Text()
+	return doc.Find("body").Text(), nil
 }
 
-func getJSONSelectorContent(body io.ReadCloser, selectors []string) string {
+func getJSONSelectorContent(body io.ReadCloser, selectors []string) (string, error) {
 	bodyBytes, err := ioutil.ReadAll(body)
 	if err != nil {
-		log.Fatal(err)
+		return "", fmt.Errorf("failed to read body during getting json selector content: %v", err)
 	}
 
 	var results []string
@@ -232,7 +241,7 @@ func getJSONSelectorContent(body io.ReadCloser, selectors []string) string {
 		results = append(results, value.String())
 	}
 
-	return strings.Join(results, "\n")
+	return strings.Join(results, "\n"), nil
 }
 
 func (m *Monitor) compareContent(storage string, selector string) bool {
