@@ -42,7 +42,7 @@ func init() {
 	ConfigFile = getEnv("CONFIG_FILE", "config.json")
 	StorageDirectory = getEnv("STORAGE_DIRECTORY", "data")
 	ChromePath = getEnv("CHROME_PATH", "/usr/bin/chromium")
-	EnableWebUI, _ = strconv.ParseBool(getEnv("ENABLE_WEBUI", "true"))
+	EnableWebUI, _ = strconv.ParseBool(getEnv("ENABLE_WEBUI", "false"))
 	log.Printf("Config File: %s", ConfigFile)
 	log.Printf("Storage Directory: %s", StorageDirectory)
 

@@ -27,10 +27,13 @@ type MonitorClient interface {
 }
 
 type ChromeClient struct {
-	Path string
+	Path     string
+	Launcher *launcher.Launcher
+	Browser  *rod.Browser
 }
 
 type HttpClient struct {
+	Client http.Client
 }
 
 type Monitor struct {
@@ -54,6 +57,9 @@ type Selectors struct {
 	CSS  *[]string `json:"css,omitempty"`
 	JSON *[]string `json:"json,omitempty"`
 }
+
+var sharedChromeClient *ChromeClient
+var sharedHttpClient *HttpClient
 
 type Monitors []Monitor
 
@@ -88,9 +94,23 @@ func (m *Monitor) Init(notifierMap notify.NotifierMap, storageDirectory string, 
 	}
 
 	if m.UseChrome {
-		m.client = ChromeClient{Path: chromePath}
+		if sharedChromeClient != nil {
+			m.client = sharedChromeClient
+		} else {
+			var err error
+			sharedChromeClient, err = newChromeClient(chromePath)
+			if err != nil {
+				log.Panic(err)
+			}
+			m.client = sharedChromeClient
+		}
 	} else {
-		m.client = HttpClient{}
+		if sharedHttpClient != nil {
+			m.client = sharedHttpClient
+		} else {
+			sharedHttpClient = &HttpClient{Client: http.Client{}}
+			m.client = sharedHttpClient
+		}
 	}
 }
 
@@ -158,7 +178,7 @@ func (m *Monitor) check() {
 }
 
 func (h HttpClient) GetContent(url string, httpHeaders http.Header, selectors Selectors) (string, error) {
-	responseBody, err := getHTTPBody(url, httpHeaders)
+	responseBody, err := h.getHTTPBody(url, httpHeaders)
 	if err != nil {
 		return "", err
 	}
@@ -186,9 +206,7 @@ func (h HttpClient) GetContent(url string, httpHeaders http.Header, selectors Se
 	return selectorContent, nil
 }
 
-func getHTTPBody(url string, headers http.Header) (io.ReadCloser, error) {
-	httpClient := http.Client{}
-
+func (h HttpClient) getHTTPBody(url string, headers http.Header) (io.ReadCloser, error) {
 	request, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new request: %v", err)
@@ -196,7 +214,7 @@ func getHTTPBody(url string, headers http.Header) (io.ReadCloser, error) {
 
 	request.Header = headers
 
-	response, err := httpClient.Do(request)
+	response, err := h.Client.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to complete http request: %v", err)
 	}
@@ -257,53 +275,74 @@ func (m *Monitor) compareContent(storage string, selector string) bool {
 }
 
 func (h ChromeClient) GetContent(url string, httpHeaders http.Header, selectors Selectors) (string, error) {
-	launcher := launcher.New().Bin(h.Path)
-	u, err := launcher.Launch()
+	responseBody, err := h.getHTTPBody(url, httpHeaders)
 	if err != nil {
-		return "", fmt.Errorf("failed to launch browser: %v", err)
+		return "", err
 	}
-	defer launcher.Cleanup()
-
-	browser := rod.New().ControlURL(u)
-	err = browser.Connect()
-	if err != nil {
-		return "", fmt.Errorf("failed to connect to browser: %v", err)
-	}
-	defer browser.Close()
-
-	page, err := browser.Page(proto.TargetCreateTarget{URL: url})
-	if err != nil {
-		return "", fmt.Errorf("unable to connect to url: %v", err)
-	}
-	wait := page.MustWaitRequestIdle()
-	wait()
-	pageContent, err := page.HTML()
-	if err != nil {
-		return "", fmt.Errorf("unable to fetch html content: %v", err)
-	}
-
-	reader := strings.NewReader(pageContent)
-	readCloser := io.NopCloser(reader)
-	defer readCloser.Close()
+	defer responseBody.Close()
 
 	var selectorContent string
 
 	if selectors.CSS != nil {
-		selectorContent, err = getCSSSelectorContent(readCloser, *selectors.CSS)
+		selectorContent, err = getCSSSelectorContent(responseBody, *selectors.CSS)
 		if err != nil {
 			return "", err
 		}
 	} else if selectors.JSON != nil {
-		selectorContent, err = getJSONSelectorContent(readCloser, *selectors.JSON)
+		selectorContent, err = getJSONSelectorContent(responseBody, *selectors.JSON)
 		if err != nil {
 			return "", err
 		}
 	} else {
-		selectorContent, err = getHTMLText(readCloser)
+		selectorContent, err = getHTMLText(responseBody)
 		if err != nil {
 			return "", err
 		}
 	}
 
 	return selectorContent, nil
+}
+
+func (h ChromeClient) getHTTPBody(url string, headers http.Header) (io.ReadCloser, error) {
+	page, err := h.Browser.Page(proto.TargetCreateTarget{URL: url})
+	if err != nil {
+		return nil, fmt.Errorf("unable to connect to url: %v", err)
+	}
+	defer page.Close()
+
+	wait := page.MustWaitRequestIdle()
+	wait()
+	pageContent, err := page.HTML()
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch html content: %v", err)
+	}
+
+	reader := strings.NewReader(pageContent)
+	readCloser := io.NopCloser(reader)
+
+	return readCloser, nil
+}
+
+func newChromeClient(chromePath string) (*ChromeClient, error) {
+	launcher := launcher.New().Bin(chromePath)
+	u, err := launcher.Launch()
+	if err != nil {
+		return nil, fmt.Errorf("failed to launch browser: %v", err)
+	}
+	//defer launcher.Cleanup()
+
+	browser := rod.New().ControlURL(u)
+	err = browser.Connect()
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to browser: %v", err)
+	}
+	//defer browser.Close()
+
+	chromeClient := &ChromeClient{
+		Path:     chromePath,
+		Launcher: launcher,
+		Browser:  browser,
+	}
+
+	return chromeClient, nil
 }
