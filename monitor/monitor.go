@@ -257,16 +257,21 @@ func (m *Monitor) compareContent(storage string, selector string) bool {
 }
 
 func (h ChromeClient) GetContent(url string, httpHeaders http.Header, selectors Selectors) (string, error) {
-	browser, err := launcher.New().Bin(h.Path).Launch()
+	launcher := launcher.New().Bin(h.Path)
+	u, err := launcher.Launch()
 	if err != nil {
 		return "", fmt.Errorf("failed to launch browser: %v", err)
 	}
-	rod := rod.New().ControlURL(browser)
-	err = rod.Connect()
+	defer launcher.Cleanup()
+
+	browser := rod.New().ControlURL(u)
+	err = browser.Connect()
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to browser: %v", err)
 	}
-	page, err := rod.Page(proto.TargetCreateTarget{URL: url})
+	defer browser.Close()
+
+	page, err := browser.Page(proto.TargetCreateTarget{URL: url})
 	if err != nil {
 		return "", fmt.Errorf("unable to connect to url: %v", err)
 	}
