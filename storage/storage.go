@@ -8,16 +8,15 @@ import (
 )
 
 type Storage struct {
-	ID        string
 	Directory string
 }
 
-func InitStorage(id string, directory string) *Storage {
-	return &Storage{ID: id, Directory: directory}
+func InitStorage(directory string) *Storage {
+	return &Storage{Directory: directory}
 }
 
-func (s *Storage) GetContent() string {
-	filePath := filepath.Join(s.Directory, s.ID)
+func (s *Storage) GetContent(id string) string {
+	filePath := filepath.Join(s.Directory, id)
 
 	os.Mkdir(s.Directory, os.ModePerm)
 
@@ -32,8 +31,8 @@ func (s *Storage) GetContent() string {
 	return string(fileData)
 }
 
-func (s *Storage) WriteContent(content string) {
-	filePath := filepath.Join(s.Directory, s.ID)
+func (s *Storage) WriteContent(id string, content string) {
+	filePath := filepath.Join(s.Directory, id)
 
 	err := ioutil.WriteFile(filePath, []byte(content), 0644)
 	if err != nil {

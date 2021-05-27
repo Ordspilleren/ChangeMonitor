@@ -14,6 +14,7 @@ import (
 	"github.com/Ordspilleren/ChangeMonitor/html"
 	"github.com/Ordspilleren/ChangeMonitor/monitor"
 	"github.com/Ordspilleren/ChangeMonitor/notify"
+	"github.com/Ordspilleren/ChangeMonitor/storage"
 )
 
 var wg = &sync.WaitGroup{}
@@ -30,6 +31,7 @@ type Config struct {
 
 var config Config
 var notifierMap notify.NotifierMap
+var storageManager *storage.Storage
 
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
@@ -58,10 +60,11 @@ func init() {
 	}
 
 	notifierMap = config.Notifiers.InitNotifiers()
+	storageManager = storage.InitStorage(StorageDirectory)
 }
 
 func main() {
-	config.Monitors.StartMonitoring(wg, notifierMap, StorageDirectory, ChromePath)
+	config.Monitors.StartMonitoring(wg, notifierMap, storageManager, ChromePath)
 
 	if EnableWebUI {
 		startHTTPServer()
@@ -143,7 +146,7 @@ func monitorNew(w http.ResponseWriter, r *http.Request) {
 		monitor.AddCSSSelectors(jsonSelectorSlice...)
 	}
 
-	monitor.Init(notifierMap, StorageDirectory, ChromePath)
+	monitor.Init(notifierMap, storageManager, ChromePath)
 
 	p.Success = true
 

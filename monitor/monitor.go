@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/Ordspilleren/ChangeMonitor/notify"
-	"github.com/Ordspilleren/ChangeMonitor/storage"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
@@ -24,6 +23,11 @@ import (
 
 type MonitorClient interface {
 	GetContent(url string, httpHeaders http.Header, selectors Selectors) (string, error)
+}
+
+type Storage interface {
+	GetContent(id string) string
+	WriteContent(id string, content string)
 }
 
 type ChromeClient struct {
@@ -50,7 +54,7 @@ type Monitor struct {
 	id          string
 	notifiers   notify.NotifierList
 	client      MonitorClient
-	storage     *storage.Storage
+	storage     Storage
 }
 
 type Selectors struct {
@@ -83,11 +87,11 @@ func (m *Monitor) AddJSONSelectors(selectors ...string) {
 	m.Selectors.JSON = &selectors
 }
 
-func (m *Monitor) Init(notifierMap notify.NotifierMap, storageDirectory string, chromePath string) {
+func (m *Monitor) Init(notifierMap notify.NotifierMap, storage Storage, chromePath string) {
 	m.id = generateSHA1String(m.URL)
 	m.doneChannel = make(chan bool)
 	m.ticker = time.NewTicker(m.Interval * time.Minute)
-	m.storage = storage.InitStorage(m.id, storageDirectory)
+	m.storage = storage
 
 	for _, notifier := range m.Notifiers {
 		m.notifiers = append(m.notifiers, notifierMap[notifier])
@@ -140,9 +144,9 @@ func (m *Monitor) IsRunning() bool {
 	return m.started
 }
 
-func (m Monitors) StartMonitoring(wg *sync.WaitGroup, notifierMap notify.NotifierMap, storageDirectory string, chromePath string) {
+func (m Monitors) StartMonitoring(wg *sync.WaitGroup, notifierMap notify.NotifierMap, storage Storage, chromePath string) {
 	for idx := range m {
-		m[idx].Init(notifierMap, storageDirectory, chromePath)
+		m[idx].Init(notifierMap, storage, chromePath)
 		m[idx].Start(wg)
 	}
 }
@@ -162,10 +166,10 @@ func (m *Monitor) check() {
 		log.Print(err)
 		return
 	}
-	storageContent := m.storage.GetContent()
+	storageContent := m.storage.GetContent(m.id)
 
 	if m.compareContent(storageContent, selectorContent) {
-		m.storage.WriteContent(selectorContent)
+		m.storage.WriteContent(m.id, selectorContent)
 		log.Print("Content has changed!")
 		_ = m.notifiers.Send(
 			context.Background(),
