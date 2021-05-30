@@ -30,7 +30,7 @@ type Config struct {
 }
 
 var config Config
-var notifierMap notify.NotifierMap
+var notifierService notify.NotifierService
 var storageManager *storage.Storage
 
 func getEnv(key, fallback string) string {
@@ -59,12 +59,12 @@ func init() {
 		return
 	}
 
-	notifierMap = config.Notifiers.InitNotifiers()
+	notifierService = notify.NewNotifierService(config.Notifiers)
 	storageManager = storage.InitStorage(StorageDirectory)
 }
 
 func main() {
-	config.Monitors.StartMonitoring(wg, notifierMap, storageManager, ChromePath)
+	config.Monitors.StartMonitoring(wg, notifierService, storageManager, ChromePath)
 
 	if EnableWebUI {
 		startHTTPServer()
@@ -133,9 +133,8 @@ func monitorNew(w http.ResponseWriter, r *http.Request) {
 	}
 	cssSelectors := r.FormValue("cssselectors")
 	jsonSelectors := r.FormValue("jsonselectors")
-	notifiers := r.Form["notifier"]
 
-	monitor := monitor.NewMonitor(name, url, interval, notifiers)
+	monitor := monitor.NewMonitor(name, url, interval, notifierService)
 
 	if cssSelectors != "" {
 		cssSelectorSlice := strings.Split(cssSelectors, "\n")
@@ -146,7 +145,7 @@ func monitorNew(w http.ResponseWriter, r *http.Request) {
 		monitor.AddCSSSelectors(jsonSelectorSlice...)
 	}
 
-	monitor.Init(notifierMap, storageManager, ChromePath)
+	monitor.Init(notifierService, storageManager, ChromePath)
 
 	p.Success = true
 

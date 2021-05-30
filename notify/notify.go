@@ -12,9 +12,9 @@ type Notifier interface {
 	Send(context.Context, string, string) error
 }
 
-type NotifierList []Notifier
-
-type NotifierMap map[string]Notifier
+type NotifierService struct {
+	notifiers []Notifier
+}
 
 type Notifiers struct {
 	Mailgun  *Mailgun  `json:"mailgun"`
@@ -29,21 +29,21 @@ type Mailgun struct {
 	Receivers     []string `json:"receivers"`
 }
 
-func (n *Notifiers) InitNotifiers() NotifierMap {
-	notifiers := make(NotifierMap)
+func NewNotifierService(notifiers Notifiers) NotifierService {
+	notifierService := NotifierService{}
 
-	if n.Telegram != nil {
-		n.Telegram.Init()
-		notifiers["telegram"] = n.Telegram
+	if notifiers.Telegram != nil {
+		notifiers.Telegram.Init()
+		notifierService.notifiers = append(notifierService.notifiers, notifiers.Telegram)
 	}
 
-	return notifiers
+	return notifierService
 }
 
-func (n NotifierList) Send(ctx context.Context, subject, message string) error {
+func (n NotifierService) Send(ctx context.Context, subject, message string) error {
 	var eg errgroup.Group
 
-	for _, service := range n {
+	for _, service := range n.notifiers {
 		if service != nil {
 			s := service
 			eg.Go(func() error {

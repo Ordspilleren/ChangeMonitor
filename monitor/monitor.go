@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Ordspilleren/ChangeMonitor/notify"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
@@ -28,6 +27,10 @@ type MonitorClient interface {
 type Storage interface {
 	GetContent(id string) string
 	WriteContent(id string, content string)
+}
+
+type NotifierService interface {
+	Send(ctx context.Context, subject, message string) error
 }
 
 type ChromeClient struct {
@@ -47,12 +50,11 @@ type Monitor struct {
 	UseChrome   bool          `json:"useChrome"`
 	Selectors   Selectors     `json:"selectors,omitempty"`
 	Interval    time.Duration `json:"interval"`
-	Notifiers   []string      `json:"notifiers,omitempty"`
+	notifiers   NotifierService
 	started     bool
 	doneChannel chan bool
 	ticker      *time.Ticker
 	id          string
-	notifiers   notify.NotifierList
 	client      MonitorClient
 	storage     Storage
 }
@@ -67,13 +69,13 @@ var sharedHttpClient *HttpClient
 
 type Monitors []Monitor
 
-func NewMonitor(name string, url string, interval int64, notifiers []string) *Monitor {
+func NewMonitor(name string, url string, interval int64, notifierService NotifierService) *Monitor {
 	monitor := &Monitor{
 		Name:      name,
 		URL:       url,
 		UseChrome: false,
 		Interval:  time.Duration(interval),
-		Notifiers: notifiers,
+		notifiers: notifierService,
 	}
 
 	return monitor
@@ -87,15 +89,12 @@ func (m *Monitor) AddJSONSelectors(selectors ...string) {
 	m.Selectors.JSON = &selectors
 }
 
-func (m *Monitor) Init(notifierMap notify.NotifierMap, storage Storage, chromePath string) {
+func (m *Monitor) Init(notifierService NotifierService, storage Storage, chromePath string) {
 	m.id = generateSHA1String(m.URL)
 	m.doneChannel = make(chan bool)
 	m.ticker = time.NewTicker(m.Interval * time.Minute)
 	m.storage = storage
-
-	for _, notifier := range m.Notifiers {
-		m.notifiers = append(m.notifiers, notifierMap[notifier])
-	}
+	m.notifiers = notifierService
 
 	if m.UseChrome {
 		if sharedChromeClient != nil {
@@ -144,9 +143,9 @@ func (m *Monitor) IsRunning() bool {
 	return m.started
 }
 
-func (m Monitors) StartMonitoring(wg *sync.WaitGroup, notifierMap notify.NotifierMap, storage Storage, chromePath string) {
+func (m Monitors) StartMonitoring(wg *sync.WaitGroup, notifierService NotifierService, storage Storage, chromePath string) {
 	for idx := range m {
-		m[idx].Init(notifierMap, storage, chromePath)
+		m[idx].Init(notifierService, storage, chromePath)
 		m[idx].Start(wg)
 	}
 }
