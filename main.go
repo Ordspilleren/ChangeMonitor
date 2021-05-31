@@ -30,8 +30,7 @@ type Config struct {
 }
 
 var config Config
-var notifierService notify.NotifierService
-var storageManager *storage.Storage
+var monitorService *monitor.MonitorService
 
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
@@ -59,12 +58,16 @@ func init() {
 		return
 	}
 
-	notifierService = notify.NewNotifierService(config.Notifiers)
-	storageManager = storage.InitStorage(StorageDirectory)
+	notifierService := notify.NewNotifierService(config.Notifiers)
+	storageManager := storage.InitStorage(StorageDirectory)
+
+	monitorService = monitor.NewMonitorService(wg, config.Monitors, storageManager, notifierService)
+	monitorService.NewMonitorClients(ChromePath)
+	monitorService.InitMonitors()
 }
 
 func main() {
-	config.Monitors.StartMonitoring(wg, notifierService, storageManager, ChromePath)
+	monitorService.StartMonitoring()
 
 	if EnableWebUI {
 		startHTTPServer()
@@ -134,7 +137,7 @@ func monitorNew(w http.ResponseWriter, r *http.Request) {
 	cssSelectors := r.FormValue("cssselectors")
 	jsonSelectors := r.FormValue("jsonselectors")
 
-	monitor := monitor.NewMonitor(name, url, interval, notifierService)
+	monitor := monitor.NewMonitor(name, url, interval, *monitorService.NotifierService)
 
 	if cssSelectors != "" {
 		cssSelectorSlice := strings.Split(cssSelectors, "\n")
@@ -145,7 +148,7 @@ func monitorNew(w http.ResponseWriter, r *http.Request) {
 		monitor.AddCSSSelectors(jsonSelectorSlice...)
 	}
 
-	monitor.Init(notifierService, storageManager, ChromePath)
+	monitor.Init(*monitorService.NotifierService, *monitorService.Storage, *monitorService.HttpClient, *monitorService.ChromeClient)
 
 	p.Success = true
 

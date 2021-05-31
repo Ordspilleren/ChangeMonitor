@@ -33,6 +33,15 @@ type NotifierService interface {
 	Send(ctx context.Context, subject, message string) error
 }
 
+type MonitorService struct {
+	WaitGroup       *sync.WaitGroup
+	Monitors        Monitors
+	HttpClient      *HttpClient
+	ChromeClient    *ChromeClient
+	Storage         *Storage
+	NotifierService *NotifierService
+}
+
 type ChromeClient struct {
 	Path     string
 	Launcher *launcher.Launcher
@@ -59,15 +68,64 @@ type Monitor struct {
 	storage     Storage
 }
 
+type Monitors []Monitor
+
 type Selectors struct {
 	CSS  *[]string `json:"css,omitempty"`
 	JSON *[]string `json:"json,omitempty"`
 }
 
-var sharedChromeClient *ChromeClient
-var sharedHttpClient *HttpClient
+func NewMonitorService(wg *sync.WaitGroup, monitors Monitors, storage Storage, notifierService NotifierService) *MonitorService {
+	monitorService := MonitorService{
+		WaitGroup:       wg,
+		Monitors:        monitors,
+		Storage:         &storage,
+		NotifierService: &notifierService,
+	}
 
-type Monitors []Monitor
+	return &monitorService
+}
+
+func (ms *MonitorService) NewMonitorClients(chromePath string) error {
+	var usingChrome bool
+
+	for _, monitor := range ms.Monitors {
+		if monitor.UseChrome {
+			usingChrome = true
+			break
+		}
+	}
+
+	if usingChrome {
+		chromeClient, err := newChromeClient(chromePath)
+		if err != nil {
+			return fmt.Errorf("failed to create new chrome client: %v", err)
+		}
+		ms.ChromeClient = chromeClient
+	} else {
+		ms.ChromeClient = &ChromeClient{}
+	}
+
+	ms.HttpClient = &HttpClient{Client: http.Client{}}
+
+	return nil
+}
+
+func (ms *MonitorService) InitMonitors() error {
+	for idx := range ms.Monitors {
+		ms.Monitors[idx].Init(*ms.NotifierService, *ms.Storage, *ms.HttpClient, *ms.ChromeClient)
+	}
+
+	return nil
+}
+
+func (ms *MonitorService) StartMonitoring() error {
+	for idx := range ms.Monitors {
+		ms.Monitors[idx].Start(ms.WaitGroup)
+	}
+
+	return nil
+}
 
 func NewMonitor(name string, url string, interval int64, notifierService NotifierService) *Monitor {
 	monitor := &Monitor{
@@ -89,7 +147,7 @@ func (m *Monitor) AddJSONSelectors(selectors ...string) {
 	m.Selectors.JSON = &selectors
 }
 
-func (m *Monitor) Init(notifierService NotifierService, storage Storage, chromePath string) {
+func (m *Monitor) Init(notifierService NotifierService, storage Storage, httpClient HttpClient, chromeClient ChromeClient) {
 	m.id = generateSHA1String(m.URL)
 	m.doneChannel = make(chan bool)
 	m.ticker = time.NewTicker(m.Interval * time.Minute)
@@ -97,23 +155,9 @@ func (m *Monitor) Init(notifierService NotifierService, storage Storage, chromeP
 	m.notifiers = notifierService
 
 	if m.UseChrome {
-		if sharedChromeClient != nil {
-			m.client = sharedChromeClient
-		} else {
-			var err error
-			sharedChromeClient, err = newChromeClient(chromePath)
-			if err != nil {
-				log.Panic(err)
-			}
-			m.client = sharedChromeClient
-		}
+		m.client = chromeClient
 	} else {
-		if sharedHttpClient != nil {
-			m.client = sharedHttpClient
-		} else {
-			sharedHttpClient = &HttpClient{Client: http.Client{}}
-			m.client = sharedHttpClient
-		}
+		m.client = httpClient
 	}
 }
 
@@ -141,13 +185,6 @@ func (m *Monitor) Stop() {
 
 func (m *Monitor) IsRunning() bool {
 	return m.started
-}
-
-func (m Monitors) StartMonitoring(wg *sync.WaitGroup, notifierService NotifierService, storage Storage, chromePath string) {
-	for idx := range m {
-		m[idx].Init(notifierService, storage, chromePath)
-		m[idx].Start(wg)
-	}
 }
 
 func generateSHA1String(input string) string {
