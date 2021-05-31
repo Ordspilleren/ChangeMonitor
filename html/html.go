@@ -21,7 +21,7 @@ var (
 )
 
 type MonitorListParams struct {
-	Monitors *monitor.Monitors
+	MonitorService *monitor.MonitorService
 }
 
 type MonitorNewParams struct {

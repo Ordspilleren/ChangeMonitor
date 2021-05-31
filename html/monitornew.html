@@ -9,21 +9,21 @@
     <div class="field">
         <label class="label">Name</label>
         <div class="control">
-            <input name="name" class="input" type="text">
+            <input name="name" class="input" type="text"{{if .Monitor}} value="{{.Monitor.Name}}"{{end}}>
         </div>
     </div>
 
     <div class="field">
         <label class="label">URL</label>
         <div class="control">
-            <input name="url" class="input" type="text">
+            <input name="url" class="input" type="text"{{if .Monitor}} value="{{.Monitor.URL}}"{{end}}>
         </div>
     </div>
 
     <div class="field">
         <label class="label">Interval</label>
         <div class="control">
-            <input name="interval" class="input" type="number">
+            <input name="interval" class="input" type="number"{{if .Monitor}} value="{{.Monitor.Interval}}"{{end}}>
         </div>
     </div>
 
@@ -38,13 +38,6 @@
         <label class="label">JSON Selectors</label>
         <div class="control">
             <textarea name="jsonselectors" class="textarea"></textarea>
-        </div>
-    </div>
-
-    <div class="field">
-        <label class="label">Notifiers</label>
-        <div class="control">
-            <input name="notifier" class="input" type="text">
         </div>
     </div>
 

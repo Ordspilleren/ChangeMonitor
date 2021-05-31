@@ -127,13 +127,18 @@ func (ms *MonitorService) StartMonitoring() error {
 	return nil
 }
 
-func NewMonitor(name string, url string, interval int64, notifierService NotifierService) *Monitor {
+func (ms *MonitorService) AddMonitors(monitors ...Monitor) error {
+	ms.Monitors = append(ms.Monitors, monitors...)
+
+	return nil
+}
+
+func NewMonitor(name string, url string, interval int64) *Monitor {
 	monitor := &Monitor{
 		Name:      name,
 		URL:       url,
 		UseChrome: false,
 		Interval:  time.Duration(interval),
-		notifiers: notifierService,
 	}
 
 	return monitor
@@ -161,7 +166,11 @@ func (m *Monitor) Init(notifierService NotifierService, storage Storage, httpCli
 	}
 }
 
-func (m *Monitor) Start(wg *sync.WaitGroup) {
+func (m *Monitor) Start(wg *sync.WaitGroup) error {
+	if m.started {
+		return errors.New("monitor is already started")
+	}
+
 	wg.Add(1)
 	m.started = true
 	go func(monitor *Monitor) {
@@ -177,9 +186,12 @@ func (m *Monitor) Start(wg *sync.WaitGroup) {
 			}
 		}
 	}(m)
+
+	return nil
 }
 
 func (m *Monitor) Stop() {
+	m.started = false
 	m.doneChannel <- true
 }
 

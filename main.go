@@ -94,7 +94,7 @@ func startHTTPServer() {
 
 func monitorList(w http.ResponseWriter, r *http.Request) {
 	p := html.MonitorListParams{
-		Monitors: &config.Monitors,
+		MonitorService: monitorService,
 	}
 
 	if r.Method != http.MethodPost {
@@ -107,8 +107,12 @@ func monitorList(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 	}
 	startMonitor := r.FormValue("start")
+	stopMonitor := r.FormValue("stop")
 	if startMonitor != "" {
-		config.Monitors[monitorID].Start(wg)
+		p.MonitorService.Monitors[monitorID].Start(p.MonitorService.WaitGroup)
+	}
+	if stopMonitor != "" {
+		p.MonitorService.Monitors[monitorID].Stop()
 	}
 
 	html.MonitorList(w, p)
@@ -120,7 +124,7 @@ func monitorNew(w http.ResponseWriter, r *http.Request) {
 	monitorID := r.URL.Query().Get("id")
 	if monitorID != "" {
 		id, _ := strconv.ParseInt(monitorID, 10, 64)
-		p.Monitor = &config.Monitors[id]
+		p.Monitor = &monitorService.Monitors[id]
 	}
 
 	if r.Method != http.MethodPost {
@@ -137,7 +141,7 @@ func monitorNew(w http.ResponseWriter, r *http.Request) {
 	cssSelectors := r.FormValue("cssselectors")
 	jsonSelectors := r.FormValue("jsonselectors")
 
-	monitor := monitor.NewMonitor(name, url, interval, *monitorService.NotifierService)
+	monitor := monitor.NewMonitor(name, url, interval)
 
 	if cssSelectors != "" {
 		cssSelectorSlice := strings.Split(cssSelectors, "\n")
@@ -151,6 +155,8 @@ func monitorNew(w http.ResponseWriter, r *http.Request) {
 	monitor.Init(*monitorService.NotifierService, *monitorService.Storage, *monitorService.HttpClient, *monitorService.ChromeClient)
 
 	p.Success = true
+
+	monitorService.AddMonitors(*monitor)
 
 	config.Monitors = append(config.Monitors, *monitor)
 

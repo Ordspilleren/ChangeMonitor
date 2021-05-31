@@ -9,7 +9,7 @@
         </tr>
     </thead>
     <tbody>
-        {{range $index, $monitor := .Monitors}}
+        {{range $index, $monitor := .MonitorService.Monitors}}
         <tr>
             <td>{{.Name}}</td>
             <td><a href="{{.URL}}">{{.URL}}</a>
