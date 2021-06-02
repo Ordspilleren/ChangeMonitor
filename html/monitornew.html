@@ -23,21 +23,21 @@
     <div class="field">
         <label class="label">Interval</label>
         <div class="control">
-            <input name="interval" class="input" type="number"{{if .Monitor}} value="{{.Monitor.Interval}}"{{end}}>
+            <input name="interval" class="input" type="number"{{if .Monitor}} value="{{.Monitor.Interval.Nanoseconds}}"{{end}}>
         </div>
     </div>
 
     <div class="field">
         <label class="label">CSS Selectors</label>
         <div class="control">
-            <textarea name="cssselectors" class="textarea"></textarea>
+            <textarea name="cssselectors" class="textarea">{{if .Monitor.Selectors.CSS}}{{StringsJoin .Monitor.Selectors.CSS "\n"}}{{end}}</textarea>
         </div>
     </div>
 
     <div class="field">
         <label class="label">JSON Selectors</label>
         <div class="control">
-            <textarea name="jsonselectors" class="textarea"></textarea>
+            <textarea name="jsonselectors" class="textarea">{{if .Monitor.Selectors.JSON}}{{StringsJoin .Monitor.Selectors.JSON "\n"}}{{end}}</textarea>
         </div>
     </div>
 

@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/Ordspilleren/ChangeMonitor/monitor"
 )
@@ -19,6 +20,10 @@ var (
 	monitorList = parse("monitorlist.html")
 	monitorNew  = parse("monitornew.html")
 )
+
+var funcs = template.FuncMap{
+	"StringsJoin": strings.Join,
+}
 
 type MonitorListParams struct {
 	MonitorService *monitor.MonitorService
@@ -39,7 +44,7 @@ func MonitorNew(w io.Writer, p MonitorNewParams) error {
 
 func parse(file string) *template.Template {
 	return template.Must(
-		template.New("layout.html").ParseFS(htmlTemplates, "layout.html", file))
+		template.New("layout.html").Funcs(funcs).ParseFS(htmlTemplates, "layout.html", file))
 }
 
 func GetAssetFS() http.FileSystem {

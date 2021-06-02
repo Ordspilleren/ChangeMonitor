@@ -86,7 +86,7 @@ func NewMonitorService(wg *sync.WaitGroup, monitors Monitors, storage Storage, n
 	return &monitorService
 }
 
-func (ms *MonitorService) NewMonitorClients(chromePath string) error {
+func (ms *MonitorService) NewMonitorClients(chromePath string, externalClient bool) error {
 	var usingChrome bool
 
 	for _, monitor := range ms.Monitors {
@@ -97,7 +97,7 @@ func (ms *MonitorService) NewMonitorClients(chromePath string) error {
 	}
 
 	if usingChrome {
-		chromeClient, err := newChromeClient(chromePath)
+		chromeClient, err := newChromeClient(chromePath, externalClient)
 		if err != nil {
 			return fmt.Errorf("failed to create new chrome client: %v", err)
 		}
@@ -375,7 +375,11 @@ func (h ChromeClient) getHTTPBody(url string, headers http.Header) (io.ReadClose
 	return readCloser, nil
 }
 
-func newChromeClient(chromePath string) (*ChromeClient, error) {
+func newChromeClient(chromePath string, externalClient bool) (*ChromeClient, error) {
+	if externalClient {
+		return newExternalChromeClient(chromePath)
+	}
+
 	launcher := launcher.New().Bin(chromePath)
 	u, err := launcher.Launch()
 	if err != nil {
@@ -394,6 +398,24 @@ func newChromeClient(chromePath string) (*ChromeClient, error) {
 		Path:     chromePath,
 		Launcher: launcher,
 		Browser:  browser,
+	}
+
+	return chromeClient, nil
+}
+
+func newExternalChromeClient(chromeWs string) (*ChromeClient, error) {
+	url, err := launcher.ResolveURL(chromeWs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to browser: %v", err)
+	}
+	browser := rod.New().ControlURL(url)
+	err = browser.Connect()
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to browser: %v", err)
+	}
+
+	chromeClient := &ChromeClient{
+		Browser: browser,
 	}
 
 	return chromeClient, nil
