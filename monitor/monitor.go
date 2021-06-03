@@ -43,7 +43,6 @@ type MonitorService struct {
 }
 
 type ChromeClient struct {
-	Path     string
 	Launcher *launcher.Launcher
 	Browser  *rod.Browser
 }
@@ -53,19 +52,19 @@ type HttpClient struct {
 }
 
 type Monitor struct {
-	Name        string        `json:"name"`
-	URL         string        `json:"url"`
-	HTTPHeaders http.Header   `json:"httpHeaders,omitempty"`
-	UseChrome   bool          `json:"useChrome"`
-	Selectors   Selectors     `json:"selectors,omitempty"`
-	Interval    time.Duration `json:"interval"`
-	notifiers   NotifierService
-	started     bool
-	doneChannel chan bool
-	ticker      *time.Ticker
-	id          string
-	client      MonitorClient
-	storage     Storage
+	Name            string        `json:"name"`
+	URL             string        `json:"url"`
+	HTTPHeaders     http.Header   `json:"httpHeaders,omitempty"`
+	UseChrome       bool          `json:"useChrome"`
+	Selectors       Selectors     `json:"selectors,omitempty"`
+	Interval        time.Duration `json:"interval"`
+	notifierService NotifierService
+	started         bool
+	doneChannel     chan bool
+	ticker          *time.Ticker
+	id              string
+	client          MonitorClient
+	storage         Storage
 }
 
 type Monitors []Monitor
@@ -157,7 +156,7 @@ func (m *Monitor) Init(notifierService NotifierService, storage Storage, httpCli
 	m.doneChannel = make(chan bool)
 	m.ticker = time.NewTicker(m.Interval * time.Minute)
 	m.storage = storage
-	m.notifiers = notifierService
+	m.notifierService = notifierService
 
 	if m.UseChrome {
 		m.client = chromeClient
@@ -219,7 +218,7 @@ func (m *Monitor) check() {
 	if m.compareContent(storageContent, selectorContent) {
 		m.storage.WriteContent(m.id, selectorContent)
 		log.Print("Content has changed!")
-		_ = m.notifiers.Send(
+		_ = m.notifierService.Send(
 			context.Background(),
 			fmt.Sprintf("<b><u>%s has changed!</u></b>", m.Name),
 			fmt.Sprintf("<b>New content:</b>\n%.200s\n\n<b>Old content:</b>\n%.200s\n\n<b>URL:</b> %s", selectorContent, storageContent, m.URL),
@@ -376,46 +375,27 @@ func (h ChromeClient) getHTTPBody(url string, headers http.Header) (io.ReadClose
 }
 
 func newChromeClient(chromePath string, externalClient bool) (*ChromeClient, error) {
+	chromeClient := &ChromeClient{}
+	var url string
+	var err error
+
 	if externalClient {
-		return newExternalChromeClient(chromePath)
+		url, err = launcher.ResolveURL(chromePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to browser: %v", err)
+		}
+	} else {
+		chromeClient.Launcher = launcher.New().Bin(chromePath)
+		url, err = chromeClient.Launcher.Launch()
+		if err != nil {
+			return nil, fmt.Errorf("failed to launch browser: %v", err)
+		}
 	}
 
-	launcher := launcher.New().Bin(chromePath)
-	u, err := launcher.Launch()
-	if err != nil {
-		return nil, fmt.Errorf("failed to launch browser: %v", err)
-	}
-	//defer launcher.Cleanup()
-
-	browser := rod.New().ControlURL(u)
-	err = browser.Connect()
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to browser: %v", err)
-	}
-	//defer browser.Close()
-
-	chromeClient := &ChromeClient{
-		Path:     chromePath,
-		Launcher: launcher,
-		Browser:  browser,
-	}
-
-	return chromeClient, nil
-}
-
-func newExternalChromeClient(chromeWs string) (*ChromeClient, error) {
-	url, err := launcher.ResolveURL(chromeWs)
+	chromeClient.Browser = rod.New().ControlURL(url)
+	err = chromeClient.Browser.Connect()
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to browser: %v", err)
-	}
-	browser := rod.New().ControlURL(url)
-	err = browser.Connect()
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to browser: %v", err)
-	}
-
-	chromeClient := &ChromeClient{
-		Browser: browser,
 	}
 
 	return chromeClient, nil

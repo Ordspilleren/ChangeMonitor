@@ -17,16 +17,7 @@ type NotifierService struct {
 }
 
 type Notifiers struct {
-	Mailgun  *Mailgun  `json:"mailgun"`
 	Telegram *Telegram `json:"telegram"`
-}
-
-type Mailgun struct {
-	Domain        string   `json:"domain"`
-	ApiKey        string   `json:"apiKey"`
-	SenderAddress string   `json:"senderAddress"`
-	WithEurope    bool     `json:"withEurope"`
-	Receivers     []string `json:"receivers"`
 }
 
 func NewNotifierService(notifiers Notifiers) NotifierService {
