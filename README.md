@@ -13,7 +13,7 @@ The following features are supported:
 The recommended way to run ChangeMonitor is using Docker. The below command should work well:
 
 ````
-docker run -d --name changemonitor -v /path/to/config.json:/config/config.json -v /path/to/data:/data changemonitor
+docker run -d --name changemonitor -v /path/to/config.json:/config/config.json -v /path/to/data:/data ordspilleren/changemonitor
 ````
 
 Since ChangeMonitor compiles to a single binary, it will be equally easy to run it without Docker. You will find the compiled binaries in releases.
@@ -34,7 +34,7 @@ Below is an example of a Docker Compose setup with an external Chrome browser as
 version: "3"
 services:
   changemonitor:
-    image: changemonitor:latest
+    image: ordspilleren/changemonitor:latest
     container_name: changemonitor
     volumes:
       - type: bind
