@@ -1,0 +1,24 @@
+{
+	"monitors": [
+		{
+			"name": "Random Quotes",
+			"url": "http://www.quotationspage.com/random.php",
+			"useChrome": false,
+			"selectors": {
+				"css": [
+					"#content > dl > dt:nth-child(3)",
+					"#content > dl > dt:nth-child(5)"
+				]
+			},
+			"interval": 5
+		}
+	],
+	"notifiers": {
+		"telegram": {
+			"apiToken": "token_here",
+			"receivers": [
+				1234567890
+			]
+		}
+	}
+}
