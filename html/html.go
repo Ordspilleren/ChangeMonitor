@@ -30,7 +30,7 @@ type MonitorListParams struct {
 }
 
 type MonitorNewParams struct {
-	Monitor *monitor.Monitor
+	Monitor monitor.Monitor
 	Success bool
 }
 

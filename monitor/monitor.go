@@ -21,7 +21,7 @@ import (
 )
 
 type MonitorClient interface {
-	GetContent(url string, httpHeaders http.Header, selectors Selectors) (string, error)
+	GetContent(url string, httpHeaders http.Header) (io.ReadCloser, error)
 }
 
 type Storage interface {
@@ -56,8 +56,9 @@ type Monitor struct {
 	URL             string        `json:"url"`
 	HTTPHeaders     http.Header   `json:"httpHeaders,omitempty"`
 	UseChrome       bool          `json:"useChrome"`
-	Selectors       Selectors     `json:"selectors,omitempty"`
 	Interval        time.Duration `json:"interval"`
+	Selectors       Selectors     `json:"selectors,omitempty"`
+	Filters         Filters       `json:"filters,omitempty"`
 	notifierService NotifierService
 	started         bool
 	doneChannel     chan bool
@@ -73,6 +74,8 @@ type Selectors struct {
 	CSS  *[]string `json:"css,omitempty"`
 	JSON *[]string `json:"json,omitempty"`
 }
+
+type Filters []string
 
 func NewMonitorService(wg *sync.WaitGroup, monitors Monitors, storage Storage, notifierService NotifierService) *MonitorService {
 	monitorService := MonitorService{
@@ -208,53 +211,85 @@ func generateSHA1String(input string) string {
 func (m *Monitor) check() {
 	log.Print(m.URL)
 
-	selectorContent, err := m.client.GetContent(m.URL, m.HTTPHeaders, m.Selectors)
+	content, err := m.client.GetContent(m.URL, m.HTTPHeaders)
 	if err != nil {
 		log.Print(err)
 		return
 	}
+	defer content.Close()
+
+	processedContent, err := processContent(content, m.Selectors, m.Filters)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
 	storageContent := m.storage.GetContent(m.id)
 
-	if m.compareContent(storageContent, selectorContent) {
-		m.storage.WriteContent(m.id, selectorContent)
+	if compareContent(storageContent, processedContent) {
+		m.storage.WriteContent(m.id, processedContent)
 		log.Print("Content has changed!")
 		_ = m.notifierService.Send(
 			context.Background(),
 			fmt.Sprintf("<b><u>%s has changed!</u></b>", m.Name),
-			fmt.Sprintf("<b>New content:</b>\n%.200s\n\n<b>Old content:</b>\n%.200s\n\n<b>URL:</b> %s", selectorContent, storageContent, m.URL),
+			fmt.Sprintf("<b>New content:</b>\n%.200s\n\n<b>Old content:</b>\n%.200s\n\n<b>URL:</b> %s", processedContent, storageContent, m.URL),
 		)
 	} else {
 		log.Printf("Nothing has changed, waiting %s.", m.Interval*time.Minute)
 	}
 }
 
-func (h HttpClient) GetContent(url string, httpHeaders http.Header, selectors Selectors) (string, error) {
-	responseBody, err := h.getHTTPBody(url, httpHeaders)
-	if err != nil {
-		return "", err
-	}
-	defer responseBody.Close()
-
+func processContent(content io.ReadCloser, selectors Selectors, filters Filters) (string, error) {
 	var selectorContent string
+	var err error
 
 	if selectors.CSS != nil {
-		selectorContent, err = getCSSSelectorContent(responseBody, *selectors.CSS)
+		selectorContent, err = getCSSSelectorContent(content, *selectors.CSS)
 		if err != nil {
 			return "", err
 		}
 	} else if selectors.JSON != nil {
-		selectorContent, err = getJSONSelectorContent(responseBody, *selectors.JSON)
+		selectorContent, err = getJSONSelectorContent(content, *selectors.JSON)
 		if err != nil {
 			return "", err
 		}
 	} else {
-		selectorContent, err = getHTMLText(responseBody)
+		selectorContent, err = getHTMLText(content)
 		if err != nil {
 			return "", err
 		}
 	}
 
+	if len(filters) > 0 {
+		selectorContent = processFilters(filters, selectorContent)
+	}
+
 	return selectorContent, nil
+}
+
+func processFilters(filters Filters, content string) string {
+	var matchedFilters []string
+
+	for _, filter := range filters {
+		if strings.Contains(content, filter) {
+			matchedFilters = append(matchedFilters, filter)
+		}
+	}
+
+	if len(matchedFilters) > 0 {
+		return strings.Join(matchedFilters, " | ")
+	} else {
+		return ""
+	}
+}
+
+func (h HttpClient) GetContent(url string, httpHeaders http.Header) (io.ReadCloser, error) {
+	responseBody, err := h.getHTTPBody(url, httpHeaders)
+	if err != nil {
+		return nil, err
+	}
+
+	return responseBody, nil
 }
 
 func (h HttpClient) getHTTPBody(url string, headers http.Header) (io.ReadCloser, error) {
@@ -318,40 +353,20 @@ func getJSONSelectorContent(body io.ReadCloser, selectors []string) (string, err
 	return strings.Join(results, "\n"), nil
 }
 
-func (m *Monitor) compareContent(storage string, selector string) bool {
+func compareContent(storage string, selector string) bool {
 	log.Printf("Cache content: %s", storage)
 	log.Printf("New content: %s", selector)
 
 	return storage != selector
 }
 
-func (h ChromeClient) GetContent(url string, httpHeaders http.Header, selectors Selectors) (string, error) {
+func (h ChromeClient) GetContent(url string, httpHeaders http.Header) (io.ReadCloser, error) {
 	responseBody, err := h.getHTTPBody(url, httpHeaders)
 	if err != nil {
-		return "", err
-	}
-	defer responseBody.Close()
-
-	var selectorContent string
-
-	if selectors.CSS != nil {
-		selectorContent, err = getCSSSelectorContent(responseBody, *selectors.CSS)
-		if err != nil {
-			return "", err
-		}
-	} else if selectors.JSON != nil {
-		selectorContent, err = getJSONSelectorContent(responseBody, *selectors.JSON)
-		if err != nil {
-			return "", err
-		}
-	} else {
-		selectorContent, err = getHTMLText(responseBody)
-		if err != nil {
-			return "", err
-		}
+		return nil, err
 	}
 
-	return selectorContent, nil
+	return responseBody, nil
 }
 
 func (h ChromeClient) getHTTPBody(url string, headers http.Header) (io.ReadCloser, error) {

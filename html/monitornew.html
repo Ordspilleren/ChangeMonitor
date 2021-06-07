@@ -9,35 +9,35 @@
     <div class="field">
         <label class="label">Name</label>
         <div class="control">
-            <input name="name" class="input" type="text"{{if .Monitor}} value="{{.Monitor.Name}}"{{end}}>
+            <input name="name" class="input" type="text"{{with .Monitor.Name}} value="{{.}}"{{end}}>
         </div>
     </div>
 
     <div class="field">
         <label class="label">URL</label>
         <div class="control">
-            <input name="url" class="input" type="text"{{if .Monitor}} value="{{.Monitor.URL}}"{{end}}>
+            <input name="url" class="input" type="text"{{with .Monitor.URL}} value="{{.}}"{{end}}>
         </div>
     </div>
 
     <div class="field">
         <label class="label">Interval</label>
         <div class="control">
-            <input name="interval" class="input" type="number"{{if .Monitor}} value="{{.Monitor.Interval.Nanoseconds}}"{{end}}>
+            <input name="interval" class="input" type="number"{{with .Monitor.Interval.Nanoseconds}} value="{{.}}"{{end}}>
         </div>
     </div>
 
     <div class="field">
         <label class="label">CSS Selectors</label>
         <div class="control">
-            <textarea name="cssselectors" class="textarea">{{if .Monitor.Selectors.CSS}}{{StringsJoin .Monitor.Selectors.CSS "\n"}}{{end}}</textarea>
+            <textarea name="cssselectors" class="textarea">{{with .Monitor.Selectors.CSS}}{{StringsJoin . "\n"}}{{end}}</textarea>
         </div>
     </div>
 
     <div class="field">
         <label class="label">JSON Selectors</label>
         <div class="control">
-            <textarea name="jsonselectors" class="textarea">{{if .Monitor.Selectors.JSON}}{{StringsJoin .Monitor.Selectors.JSON "\n"}}{{end}}</textarea>
+            <textarea name="jsonselectors" class="textarea">{{with .Monitor.Selectors.JSON}}{{StringsJoin . "\n"}}{{end}}</textarea>
         </div>
     </div>
 
