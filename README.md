@@ -9,14 +9,14 @@ The following features are supported:
 * Simple configuration using a JSON config file.
 * Experimental WebUI.
 
-## Usage
+## Setup
 The recommended way to run ChangeMonitor is using Docker. The below command should work well:
 
 ````
 docker run -d --name changemonitor -v /path/to/config.json:/config/config.json -v /path/to/data:/data ordspilleren/changemonitor
 ````
 
-Since ChangeMonitor compiles to a single binary, it will be equally easy to run it without Docker. You will find the compiled binaries in releases.
+Since ChangeMonitor compiles to a single binary, it will be equally easy to run it without Docker. You will find the compiled binaries in the [releases section](https://github.com/Ordspilleren/ChangeMonitor/releases).
 
 The application can be set up using the following environment variables:
 * `CONFIG_FILE` Location of config file.
@@ -51,3 +51,8 @@ services:
     command: ["--no-sandbox", "--remote-debugging-address=0.0.0.0", "--remote-debugging-port=9222"]
     restart: unless-stopped
 ````
+
+## Configuration
+ChangeMonitor is configured through a JSON config file. An example config can be found in `config.example.json`.
+
+All fields except `name`, `url` and `interval` are optional.

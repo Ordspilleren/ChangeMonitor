@@ -4,13 +4,17 @@
 			"name": "Random Quotes",
 			"url": "http://www.quotationspage.com/random.php",
 			"useChrome": false,
+			"interval": 5,
+			"httpHeaders": {
+				"user-agent": ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36"]
+			},
 			"selectors": {
 				"css": [
 					"#content > dl > dt:nth-child(3)",
 					"#content > dl > dt:nth-child(5)"
 				]
 			},
-			"interval": 5
+			"filters": ["perfection", "success"]
 		}
 	],
 	"notifiers": {
