@@ -57,7 +57,7 @@ type Monitor struct {
 	HTTPHeaders     http.Header   `json:"httpHeaders,omitempty"`
 	UseChrome       bool          `json:"useChrome"`
 	Interval        time.Duration `json:"interval"`
-	Selectors       Selectors     `json:"selectors,omitempty"`
+	Selector        Selector      `json:"selector,omitempty"`
 	Filters         Filters       `json:"filters,omitempty"`
 	notifierService NotifierService
 	started         bool
@@ -70,9 +70,9 @@ type Monitor struct {
 
 type Monitors []Monitor
 
-type Selectors struct {
-	CSS  *[]string `json:"css,omitempty"`
-	JSON *[]string `json:"json,omitempty"`
+type Selector struct {
+	Type  string   `json:"type,omitempty"`
+	Paths []string `json:"paths,omitempty"`
 }
 
 type Filters []string
@@ -147,11 +147,13 @@ func NewMonitor(name string, url string, interval int64) *Monitor {
 }
 
 func (m *Monitor) AddCSSSelectors(selectors ...string) {
-	m.Selectors.CSS = &selectors
+	m.Selector.Type = "css"
+	m.Selector.Paths = selectors
 }
 
 func (m *Monitor) AddJSONSelectors(selectors ...string) {
-	m.Selectors.JSON = &selectors
+	m.Selector.Type = "json"
+	m.Selector.Paths = selectors
 }
 
 func (m *Monitor) Init(notifierService NotifierService, storage Storage, httpClient HttpClient, chromeClient ChromeClient) {
@@ -218,7 +220,7 @@ func (m *Monitor) check() {
 	}
 	defer content.Close()
 
-	processedContent, err := processContent(content, m.Selectors, m.Filters)
+	processedContent, err := processContent(content, m.Selector, m.Filters)
 	if err != nil {
 		log.Print(err)
 		return
@@ -239,17 +241,17 @@ func (m *Monitor) check() {
 	}
 }
 
-func processContent(content io.ReadCloser, selectors Selectors, filters Filters) (string, error) {
+func processContent(content io.ReadCloser, selector Selector, filters Filters) (string, error) {
 	var selectorContent string
 	var err error
 
-	if selectors.CSS != nil {
-		selectorContent, err = getCSSSelectorContent(content, *selectors.CSS)
+	if selector.Type == "css" {
+		selectorContent, err = getCSSSelectorContent(content, selector.Paths)
 		if err != nil {
 			return "", err
 		}
-	} else if selectors.JSON != nil {
-		selectorContent, err = getJSONSelectorContent(content, *selectors.JSON)
+	} else if selector.Type == "json" {
+		selectorContent, err = getJSONSelectorContent(content, selector.Paths)
 		if err != nil {
 			return "", err
 		}
