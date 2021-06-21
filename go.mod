@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/PuerkitoBio/goquery v1.6.1
+	github.com/go-chi/chi/v5 v5.0.3 // indirect
 	github.com/go-rod/rod v0.99.1
 	github.com/go-telegram-bot-api/telegram-bot-api v4.6.4+incompatible
 	github.com/pkg/errors v0.9.1

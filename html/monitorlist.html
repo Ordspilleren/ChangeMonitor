@@ -1,5 +1,5 @@
 {{define "content"}}
-<a href="/new" class="button is-primary is-medium is-fullwidth">New Monitor</a>
+<a href="/monitors/new" class="button is-primary is-medium is-fullwidth">New Monitor</a>
 <table class="table is-striped is-fullwidth">
     <thead>
         <tr>
@@ -23,6 +23,7 @@
                         {{else}}
                         <input type="submit" class="button is-small is-primary" name="start" value="Start"></input>
                         {{end}}
+                        <a class="button is-small is-link" href="/monitors/{{$index}}/edit">Edit</a>
                     </div>
                 </form>
             </td>

@@ -9,35 +9,59 @@
     <div class="field">
         <label class="label">Name</label>
         <div class="control">
-            <input name="name" class="input" type="text"{{with .Monitor.Name}} value="{{.}}"{{end}}>
+            <input name="name" class="input" type="text" {{with .Monitor.Name}} value="{{.}}" {{end}}>
         </div>
     </div>
 
     <div class="field">
         <label class="label">URL</label>
         <div class="control">
-            <input name="url" class="input" type="text"{{with .Monitor.URL}} value="{{.}}"{{end}}>
+            <input name="url" class="input" type="text" {{with .Monitor.URL}}value="{{.}}"{{end}}>
+        </div>
+    </div>
+
+    <div class="field">
+        <label class="label">Use Chrome</label>
+        <div class="control">
+            <label class="radio">
+                <input type="radio" name="usechrome" value="yes" {{if .Monitor.UseChrome}}checked{{end}}>
+                Yes
+            </label>
+            <label class="radio">
+                <input type="radio" name="usechrome" value="no" {{if not .Monitor.UseChrome}}checked{{end}}>
+                No
+            </label>
         </div>
     </div>
 
     <div class="field">
         <label class="label">Interval</label>
         <div class="control">
-            <input name="interval" class="input" type="number"{{with .Monitor.Interval.Nanoseconds}} value="{{.}}"{{end}}>
+            <input name="interval" class="input" type="number" {{with .Monitor.Interval.Nanoseconds}}value="{{.}}"{{end}}>
         </div>
     </div>
 
     <div class="field">
-        <label class="label">CSS Selectors</label>
+        <label class="label">Selector</label>
         <div class="control">
-            <textarea name="cssselectors" class="textarea">{{with .Monitor.Selectors.CSS}}{{StringsJoin . "\n"}}{{end}}</textarea>
+            <div class="select">
+                <select name="selectortype">
+                    <option value="none">None</option>
+                    <option value="css" {{if eq .Monitor.Selector.Type "css" }}selected{{end}}>CSS</option>
+                    <option value="json" {{if eq .Monitor.Selector.Type "json" }}selected{{end}}>JSON</option>
+                </select>
+            </div>
         </div>
     </div>
 
     <div class="field">
-        <label class="label">JSON Selectors</label>
         <div class="control">
-            <textarea name="jsonselectors" class="textarea">{{with .Monitor.Selectors.JSON}}{{StringsJoin . "\n"}}{{end}}</textarea>
+            {{range .Monitor.Selector.Paths}}
+            <input name="path" class="input" type="text" value="{{.}}">
+            {{end}}
+            {{with not .Monitor.Selector.Type}}
+            <input name="path" class="input" type="text" placeholder="Selector path">
+            {{end}}
         </div>
     </div>
 
