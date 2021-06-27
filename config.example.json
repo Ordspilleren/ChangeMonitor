@@ -12,7 +12,8 @@
 				"type": "css",
 				"paths": ["#content > dl > dt:nth-child(3)", "#content > dl > dt:nth-child(5)"]
 			},
-			"filters": ["perfection", "success"]
+			"filters": ["perfection", "success"],
+			"ignoreEmpty": true
 		}
 	],
 	"notifiers": {

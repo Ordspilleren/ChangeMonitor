@@ -59,6 +59,7 @@ type Monitor struct {
 	Interval        time.Duration `json:"interval"`
 	Selector        Selector      `json:"selector,omitempty"`
 	Filters         Filters       `json:"filters,omitempty"`
+	IgnoreEmpty     bool          `json:"ignoreEmpty,omitempty"`
 	notifierService NotifierService
 	started         bool
 	doneChannel     chan bool
@@ -226,6 +227,11 @@ func (m *Monitor) check() {
 		return
 	}
 
+	if m.IgnoreEmpty && processedContent == "" {
+		log.Print("Content is empty, ignoring...")
+		return
+	}
+
 	storageContent := m.storage.GetContent(m.id)
 
 	if compareContent(storageContent, processedContent) {
@@ -266,7 +272,7 @@ func processContent(content io.ReadCloser, selector Selector, filters Filters) (
 		selectorContent = processFilters(filters, selectorContent)
 	}
 
-	return selectorContent, nil
+	return strings.TrimSpace(selectorContent), nil
 }
 
 func processFilters(filters Filters, content string) string {
