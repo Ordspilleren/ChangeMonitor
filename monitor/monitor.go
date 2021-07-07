@@ -58,7 +58,7 @@ type Monitor struct {
 	UseChrome       bool          `json:"useChrome"`
 	Interval        time.Duration `json:"interval"`
 	Selector        Selector      `json:"selector,omitempty"`
-	Filters         Filters       `json:"filters,omitempty"`
+	Filters         *Filters      `json:"filters,omitempty"`
 	IgnoreEmpty     bool          `json:"ignoreEmpty,omitempty"`
 	notifierService NotifierService
 	started         bool
@@ -76,7 +76,10 @@ type Selector struct {
 	Paths []string `json:"paths,omitempty"`
 }
 
-type Filters []string
+type Filters struct {
+	Contains    []string `json:"contains,omitempty"`
+	NotContains []string `json:"notContains,omitempty"`
+}
 
 func NewMonitorService(wg *sync.WaitGroup, monitors Monitors, storage Storage, notifierService NotifierService) *MonitorService {
 	monitorService := MonitorService{
@@ -221,7 +224,7 @@ func (m *Monitor) check() {
 	}
 	defer content.Close()
 
-	processedContent, err := processContent(content, m.Selector, m.Filters)
+	processedContent, err := processContent(content, m.Selector)
 	if err != nil {
 		log.Print(err)
 		return
@@ -229,6 +232,11 @@ func (m *Monitor) check() {
 
 	if m.IgnoreEmpty && processedContent == "" {
 		log.Print("Content is empty, ignoring...")
+		return
+	}
+
+	if m.Filters != nil && !filterMatch(*m.Filters, processedContent) {
+		log.Print("No filters matched, ignoring...")
 		return
 	}
 
@@ -247,7 +255,7 @@ func (m *Monitor) check() {
 	}
 }
 
-func processContent(content io.ReadCloser, selector Selector, filters Filters) (string, error) {
+func processContent(content io.ReadCloser, selector Selector) (string, error) {
 	var selectorContent string
 	var err error
 
@@ -268,27 +276,23 @@ func processContent(content io.ReadCloser, selector Selector, filters Filters) (
 		}
 	}
 
-	if len(filters) > 0 {
-		selectorContent = processFilters(filters, selectorContent)
-	}
-
 	return strings.TrimSpace(selectorContent), nil
 }
 
-func processFilters(filters Filters, content string) string {
-	var matchedFilters []string
-
-	for _, filter := range filters {
+func filterMatch(filter Filters, content string) bool {
+	for _, filter := range filter.Contains {
 		if strings.Contains(content, filter) {
-			matchedFilters = append(matchedFilters, filter)
+			return true
 		}
 	}
 
-	if len(matchedFilters) > 0 {
-		return strings.Join(matchedFilters, " | ")
-	} else {
-		return ""
+	for _, filter := range filter.NotContains {
+		if !strings.Contains(content, filter) {
+			return true
+		}
 	}
+
+	return false
 }
 
 func (h HttpClient) GetContent(url string, httpHeaders http.Header) (io.ReadCloser, error) {
