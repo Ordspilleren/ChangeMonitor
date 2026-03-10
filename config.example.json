@@ -1,30 +1,37 @@
 {
-	"monitors": [
-		{
-			"name": "Random Quotes",
-			"url": "http://www.quotationspage.com/random.php",
-			"useChrome": false,
-			"interval": 5,
-			"httpHeaders": {
-				"user-agent": ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36"]
-			},
-			"selector": {
-				"type": "css",
-				"paths": ["#content > dl > dt:nth-child(3)", "#content > dl > dt:nth-child(5)"]
-			},
-			"filters": {
-				"contains": ["test"],
-				"notContains": ["notTest"]
-			},
-			"ignoreEmpty": true
-		}
-	],
-	"notifiers": {
-		"telegram": {
-			"apiToken": "token_here",
-			"receivers": [
-				1234567890
-			]
-		}
-	}
+    "monitors": [
+        {
+            "name": "Random Quotes",
+            "url": "http://www.quotationspage.com/random.php",
+            "useChrome": false,
+            "interval": 5,
+            "httpHeaders": {
+                "user-agent": [
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36"
+                ]
+            },
+            "selector": {
+                "type": "css",
+                "paths": [
+                    "#content > dl > dt:nth-child(3)",
+                    "#content > dl > dt:nth-child(5)"
+                ]
+            },
+            "filters": {
+                "contains": [
+                    "test"
+                ],
+                "notContains": [
+                    "notTest"
+                ]
+            },
+            "ignoreEmpty": true
+        }
+    ],
+    "notifiers": {
+        "pushover": {
+            "apiToken": "your_pushover_app_token",
+            "userKey": "your_pushover_user_key"
+        }
+    }
 }

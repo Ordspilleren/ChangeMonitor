@@ -34,7 +34,7 @@ func (s *Storage) GetContent(id string) string {
 func (s *Storage) WriteContent(id string, content string) {
 	filePath := filepath.Join(s.Directory, id)
 
-	err := ioutil.WriteFile(filePath, []byte(content), 0644)
+	err := os.WriteFile(filePath, []byte(content), 0644)
 	if err != nil {
 		log.Panic(err)
 	}
