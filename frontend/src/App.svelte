@@ -4,15 +4,15 @@
   import MonitorModal from './lib/MonitorModal.svelte'
   import type { Config, Monitor, Notification } from './types'
 
-  let config: Config | null = null
-  let loading: boolean = true
-  let saving: boolean = false
-  let notification: Notification | null = null
+  let config: Config | null = $state(null)
+  let loading = $state(true)
+  let saving = $state(false)
+  let notification: Notification | null = $state(null)
   let notifTimer: ReturnType<typeof setTimeout> | null = null
 
-  let showModal: boolean = false
-  let editIndex: number = -1
-  let editingMonitor: Monitor | null = null
+  let showModal = $state(false)
+  let editIndex = $state(-1)
+  let editingMonitor: Monitor | null = $state(null)
 
   onMount(async () => {
     try {
@@ -74,9 +74,8 @@
     config.monitors = config.monitors.filter((_, idx) => idx !== i)
   }
 
-  function onModalSave(event: CustomEvent<Monitor>): void {
+  function onModalSave(m: Monitor): void {
     if (!config) return
-    const m = event.detail
     if (editIndex === -1) {
       config.monitors = [...config.monitors, m]
     } else {
@@ -99,7 +98,7 @@
       </div>
       <button
         class="btn btn-primary"
-        on:click={save}
+        onclick={save}
         disabled={saving || loading || !config}
       >
         {saving ? 'Saving…' : 'Save Changes'}
@@ -121,7 +120,7 @@
       <section class="card">
         <div class="section-header">
           <h2>Monitors</h2>
-          <button class="btn btn-secondary" on:click={openAdd}>+ Add Monitor</button>
+          <button class="btn btn-secondary" onclick={openAdd}>+ Add Monitor</button>
         </div>
 
         {#if config.monitors.length === 0}
@@ -133,11 +132,11 @@
                 <div class="query-header">
                   <div class="monitor-name-url">
                     <strong>{monitor.name || 'Unnamed monitor'}</strong>
-                    <span class="monitor-url"><a href="{monitor.url}" target="_blank" rel="noopener noreferrer">{monitor.url}</a></span>
+                    <a class="monitor-url" href="{monitor.url}" target="_blank" rel="noopener noreferrer">{monitor.url}</a>
                   </div>
                   <div class="query-actions">
-                    <button class="btn btn-sm" on:click={() => openEdit(i)}>Edit</button>
-                    <button class="btn btn-sm btn-danger" on:click={() => deleteMonitor(i)}>Delete</button>
+                    <button class="btn btn-sm" onclick={() => openEdit(i)}>Edit</button>
+                    <button class="btn btn-sm btn-danger" onclick={() => deleteMonitor(i)}>Delete</button>
                   </div>
                 </div>
                 <div class="query-meta">
@@ -193,7 +192,7 @@
 {#if showModal && editingMonitor}
   <MonitorModal
     monitor={editingMonitor}
-    on:save={onModalSave}
-    on:cancel={() => (showModal = false)}
+    onsave={onModalSave}
+    oncancel={() => (showModal = false)}
   />
 {/if}

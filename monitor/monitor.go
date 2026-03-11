@@ -192,6 +192,36 @@ func (ms *MonitorService) Shutdown() {
 	}
 }
 
+// PreviewRequest holds the parameters needed to fetch and process content for a
+// preview without persisting any state.
+type PreviewRequest struct {
+	URL         string      `json:"url"`
+	HTTPHeaders http.Header `json:"httpHeaders,omitempty"`
+	UseChrome   bool        `json:"useChrome"`
+	Selector    Selector    `json:"selector"`
+}
+
+// Preview fetches and processes content for m without recording anything.
+func (ms *MonitorService) Preview(req PreviewRequest) (string, error) {
+	var client MonitorClient
+	if req.UseChrome {
+		if ms.chromeClient == nil {
+			return "", fmt.Errorf("chrome client not initialised")
+		}
+		client = ms.chromeClient
+	} else {
+		client = ms.httpClient
+	}
+
+	content, err := client.GetContent(req.URL, req.HTTPHeaders)
+	if err != nil {
+		return "", err
+	}
+	defer content.Close()
+
+	return processContent(content, req.Selector)
+}
+
 // NewMonitor is a convenience constructor for a basic monitor.
 func NewMonitor(name, url string, intervalMinutes int64) *Monitor {
 	return &Monitor{
@@ -303,8 +333,8 @@ func (m *Monitor) check() {
 	log.Printf("monitor: %q has changed", m.Name)
 	if err := m.notifier.Notify(
 		context.Background(),
-		fmt.Sprintf("<b><u>%s has changed!</u></b>", m.Name),
-		fmt.Sprintf("<b>New content:</b>\n%.200s\n\n<b>Old content:</b>\n%.200s\n\n<b>URL:</b> %s", processed, stored, m.URL),
+		fmt.Sprintf("ChangeMonitor: %s has changed!", m.Name),
+		fmt.Sprintf("%s changed.\n\n---\n(changed) %.200s\n\n(into) %.200s\n---", m.URL, stored, processed),
 	); err != nil {
 		log.Printf("monitor: notify: %v", err)
 	}

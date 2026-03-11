@@ -319,7 +319,7 @@ textarea {
   min-width: 0;
 }
 
-.monitor-url a {
+.monitor-url {
   font-size: 12px;
   color: var(--text-muted);
   overflow: hidden;
@@ -452,6 +452,35 @@ textarea {
   padding: 16px 24px;
   border-top: 1px solid var(--border);
   background: var(--bg);
+}
+
+/* ─── Preview result ─────────────────────────────────────────────────── */
+
+.preview-result label {
+  margin-bottom: 6px;
+}
+
+.preview-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
+  font-size: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  color: var(--text);
+}
+
+.preview-error {
+  background: var(--error-bg);
+  color: var(--error-text);
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13px;
 }
 
 /* ─── Chip input ─────────────────────────────────────────────────────── */

@@ -1,29 +1,37 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte'
   import type { Monitor } from '../types'
 
-  export let monitor: Monitor
+  interface Props {
+    monitor: Monitor
+    onsave: (m: Monitor) => void
+    oncancel: () => void
+  }
 
-  const dispatch = createEventDispatcher<{ save: Monitor; cancel: undefined }>()
+  let { monitor, onsave, oncancel }: Props = $props()
 
-  let name: string = monitor.name
-  let url: string = monitor.url
-  let interval: number = monitor.interval
-  let useChrome: boolean = monitor.useChrome
-  let selectorType: string = monitor.selector?.type ?? ''
-  let selectorPaths: string = (monitor.selector?.paths ?? []).join('\n')
-  let filterContains: string = (monitor.filters?.contains ?? []).join('\n')
-  let filterNotContains: string = (monitor.filters?.notContains ?? []).join('\n')
-  let ignoreEmpty: boolean = monitor.ignoreEmpty ?? false
+  let name = $state(monitor.name)
+  let url = $state(monitor.url)
+  let interval = $state(monitor.interval)
+  let useChrome = $state(monitor.useChrome)
+  let selectorType = $state(monitor.selector?.type ?? '')
+  let selectorPaths = $state((monitor.selector?.paths ?? []).join('\n'))
+  let filterContains = $state((monitor.filters?.contains ?? []).join('\n'))
+  let filterNotContains = $state((monitor.filters?.notContains ?? []).join('\n'))
+  let ignoreEmpty = $state(monitor.ignoreEmpty ?? false)
 
-  $: valid = name.trim() !== '' && url.trim() !== '' && interval > 0
+  let previewContent: string | null = $state(null)
+  let previewError: string | null = $state(null)
+  let previewing = $state(false)
+
+  let valid = $derived(name.trim() !== '' && url.trim() !== '' && interval > 0)
+  let canPreview = $derived(url.trim() !== '')
 
   function save(): void {
     if (!valid) return
     const paths = selectorPaths.split('\n').map((s) => s.trim()).filter(Boolean)
     const contains = filterContains.split('\n').map((s) => s.trim()).filter(Boolean)
     const notContains = filterNotContains.split('\n').map((s) => s.trim()).filter(Boolean)
-    dispatch('save', {
+    onsave({
       name: name.trim(),
       url: url.trim(),
       interval,
@@ -34,8 +42,32 @@
     })
   }
 
-  function cancel(): void {
-    dispatch('cancel')
+  async function preview(): Promise<void> {
+    previewContent = null
+    previewError = null
+    previewing = true
+    try {
+      const paths = selectorPaths.split('\n').map((s) => s.trim()).filter(Boolean)
+      const res = await fetch('/api/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: url.trim(),
+          useChrome,
+          selector: selectorType ? { type: selectorType, paths } : undefined,
+        }),
+      })
+      if (!res.ok) {
+        previewError = await res.text()
+      } else {
+        const data = await res.json()
+        previewContent = data.content
+      }
+    } catch (e) {
+      previewError = String(e)
+    } finally {
+      previewing = false
+    }
   }
 
   function trapFocus(node: HTMLElement): { destroy: () => void } {
@@ -61,12 +93,12 @@
   }
 </script>
 
-<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 <div class="modal-backdrop">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" use:trapFocus>
     <div class="modal-header">
       <h3 id="modal-title">{monitor.name ? 'Edit Monitor' : 'New Monitor'}</h3>
-      <button class="close-btn" on:click={cancel} aria-label="Close">×</button>
+      <button class="close-btn" onclick={oncancel} aria-label="Close">×</button>
     </div>
 
     <div class="modal-body">
@@ -161,11 +193,25 @@
           Ignore empty content (skip notification if page returns nothing)
         </label>
       </div>
+
+      {#if previewContent !== null || previewError !== null}
+        <div class="form-group preview-result">
+          <label>Preview</label>
+          {#if previewError}
+            <div class="preview-error">{previewError}</div>
+          {:else}
+            <pre class="preview-content">{previewContent}</pre>
+          {/if}
+        </div>
+      {/if}
     </div>
 
     <div class="modal-footer">
-      <button class="btn" on:click={cancel}>Cancel</button>
-      <button class="btn btn-primary" on:click={save} disabled={!valid}>
+      <button class="btn" onclick={oncancel}>Cancel</button>
+      <button class="btn btn-secondary" onclick={preview} disabled={!canPreview || previewing}>
+        {previewing ? 'Loading…' : 'Preview'}
+      </button>
+      <button class="btn btn-primary" onclick={save} disabled={!valid}>
         Save Monitor
       </button>
     </div>

@@ -8,23 +8,25 @@ import (
 	"os"
 
 	appcfg "github.com/Ordspilleren/ChangeMonitor/config"
+	"github.com/Ordspilleren/ChangeMonitor/monitor"
 )
 
 type Server struct {
 	config         *appcfg.Config
 	configFile     string
 	mux            *http.ServeMux
-	onConfigUpdate func(*appcfg.Config) error
+	monitorService *monitor.MonitorService
 }
 
-func NewServer(config *appcfg.Config, configFile string, staticFS fs.FS, onConfigUpdate func(*appcfg.Config) error) *Server {
+func NewServer(config *appcfg.Config, configFile string, staticFS fs.FS, monitorService *monitor.MonitorService) *Server {
 	s := &Server{
 		config:         config,
 		configFile:     configFile,
 		mux:            http.NewServeMux(),
-		onConfigUpdate: onConfigUpdate,
+		monitorService: monitorService,
 	}
 	s.mux.HandleFunc("/api/config", s.handleConfig)
+	s.mux.HandleFunc("/api/preview", s.handlePreview)
 	s.mux.Handle("/", http.FileServer(http.FS(staticFS)))
 	return s
 }
@@ -34,6 +36,28 @@ func (s *Server) Start() {
 	if err := http.ListenAndServe(":8080", s.mux); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req monitor.PreviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	content, err := s.monitorService.Preview(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"content": content})
 }
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
@@ -76,12 +100,10 @@ func (s *Server) postConfig(w http.ResponseWriter, r *http.Request) {
 
 	s.config = &newConfig
 
-	if s.onConfigUpdate != nil {
-		if err := s.onConfigUpdate(&newConfig); err != nil {
-			log.Printf("server: config reload: %v", err)
-			http.Error(w, "config saved but monitors failed to reload: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
+	if err := s.monitorService.Reload(newConfig.Monitors); err != nil {
+		log.Printf("server: config reload: %v", err)
+		http.Error(w, "config saved but monitors failed to reload: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
