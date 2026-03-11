@@ -1,7 +1,7 @@
 project_name: changemonitor
 builds:
   - main: ./cmd/changemonitor
-  - env: [CGO_ENABLED=0]
+    env: [CGO_ENABLED=0]
     goos:
       - linux
       - windows
