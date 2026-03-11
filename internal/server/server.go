@@ -11,16 +11,18 @@ import (
 )
 
 type Server struct {
-	config     *appcfg.Config
-	configFile string
-	mux        *http.ServeMux
+	config         *appcfg.Config
+	configFile     string
+	mux            *http.ServeMux
+	onConfigUpdate func(*appcfg.Config) error
 }
 
-func NewServer(config *appcfg.Config, configFile string, staticFS fs.FS) *Server {
+func NewServer(config *appcfg.Config, configFile string, staticFS fs.FS, onConfigUpdate func(*appcfg.Config) error) *Server {
 	s := &Server{
-		config:     config,
-		configFile: configFile,
-		mux:        http.NewServeMux(),
+		config:         config,
+		configFile:     configFile,
+		mux:            http.NewServeMux(),
+		onConfigUpdate: onConfigUpdate,
 	}
 	s.mux.HandleFunc("/api/config", s.handleConfig)
 	s.mux.Handle("/", http.FileServer(http.FS(staticFS)))
@@ -73,5 +75,14 @@ func (s *Server) postConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.config = &newConfig
+
+	if s.onConfigUpdate != nil {
+		if err := s.onConfigUpdate(&newConfig); err != nil {
+			log.Printf("server: config reload: %v", err)
+			http.Error(w, "config saved but monitors failed to reload: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }

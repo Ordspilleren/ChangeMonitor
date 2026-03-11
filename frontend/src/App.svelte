@@ -117,6 +117,49 @@
     <p class="loading">Loading configuration…</p>
   {:else if config}
     <main>
+      <!-- Monitors -->
+      <section class="card">
+        <div class="section-header">
+          <h2>Monitors</h2>
+          <button class="btn btn-secondary" on:click={openAdd}>+ Add Monitor</button>
+        </div>
+
+        {#if config.monitors.length === 0}
+          <p class="empty">No monitors yet — click <strong>Add Monitor</strong> to create one.</p>
+        {:else}
+          <div class="queries">
+            {#each config.monitors as monitor, i}
+              <div class="query-card">
+                <div class="query-header">
+                  <div class="monitor-name-url">
+                    <strong>{monitor.name || 'Unnamed monitor'}</strong>
+                    <span class="monitor-url"><a href="{monitor.url}" target="_blank" rel="noopener noreferrer">{monitor.url}</a></span>
+                  </div>
+                  <div class="query-actions">
+                    <button class="btn btn-sm" on:click={() => openEdit(i)}>Edit</button>
+                    <button class="btn btn-sm btn-danger" on:click={() => deleteMonitor(i)}>Delete</button>
+                  </div>
+                </div>
+                <div class="query-meta">
+                  <div class="tags">
+                    <span class="tag">Every {monitor.interval}m</span>
+                    {#if monitor.useChrome}
+                      <span class="tag tag-site">Chrome</span>
+                    {/if}
+                    {#if monitor.selector?.type}
+                      <span class="tag">{monitor.selector.type.toUpperCase()} selector</span>
+                    {/if}
+                    {#if monitor.ignoreEmpty}
+                      <span class="tag">Ignore empty</span>
+                    {/if}
+                  </div>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </section>
+
       <!-- Pushover Notifications -->
       <section class="card">
         <h2>Pushover Notifications</h2>
@@ -141,49 +184,6 @@
             autocomplete="off"
           />
         </div>
-        {/if}
-      </section>
-
-      <!-- Monitors -->
-      <section class="card">
-        <div class="section-header">
-          <h2>Monitors</h2>
-          <button class="btn btn-secondary" on:click={openAdd}>+ Add Monitor</button>
-        </div>
-
-        {#if config.monitors.length === 0}
-          <p class="empty">No monitors yet — click <strong>Add Monitor</strong> to create one.</p>
-        {:else}
-          <div class="queries">
-            {#each config.monitors as monitor, i}
-              <div class="query-card">
-                <div class="query-header">
-                  <div class="monitor-name-url">
-                    <strong>{monitor.name || 'Unnamed monitor'}</strong>
-                    <span class="monitor-url">{monitor.url}</span>
-                  </div>
-                  <div class="query-actions">
-                    <button class="btn btn-sm" on:click={() => openEdit(i)}>Edit</button>
-                    <button class="btn btn-sm btn-danger" on:click={() => deleteMonitor(i)}>Delete</button>
-                  </div>
-                </div>
-                <div class="query-meta">
-                  <div class="tags">
-                    <span class="tag">Every {monitor.interval}m</span>
-                    {#if monitor.useChrome}
-                      <span class="tag tag-site">Chrome</span>
-                    {/if}
-                    {#if monitor.selector?.type}
-                      <span class="tag">{monitor.selector.type.toUpperCase()} selector</span>
-                    {/if}
-                    {#if monitor.ignoreEmpty}
-                      <span class="tag">Ignore empty</span>
-                    {/if}
-                  </div>
-                </div>
-              </div>
-            {/each}
-          </div>
         {/if}
       </section>
     </main>

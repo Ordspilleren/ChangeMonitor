@@ -53,7 +53,9 @@ func main() {
 	}
 	monitorService.Start()
 
-	server := server.NewServer(config, ConfigFile, frontend.FrontendDistFS())
+	server := server.NewServer(config, ConfigFile, frontend.FrontendDistFS(), func(cfg *appcfg.Config) error {
+		return monitorService.Reload(cfg.Monitors)
+	})
 	server.Start()
 }
 

@@ -38,10 +38,6 @@
     dispatch('cancel')
   }
 
-  function onBackdropClick(e: MouseEvent): void {
-    if (e.target === e.currentTarget) cancel()
-  }
-
   function trapFocus(node: HTMLElement): { destroy: () => void } {
     const focusable = (): HTMLElement[] =>
       Array.from(node.querySelectorAll<HTMLElement>(
@@ -66,7 +62,7 @@
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-<div class="modal-backdrop" on:click={onBackdropClick}>
+<div class="modal-backdrop">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" use:trapFocus>
     <div class="modal-header">
       <h3 id="modal-title">{monitor.name ? 'Edit Monitor' : 'New Monitor'}</h3>

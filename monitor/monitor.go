@@ -27,6 +27,8 @@ type MonitorClient interface {
 type Storage interface {
 	GetContent(id string) string
 	WriteContent(id string, content string)
+	// Cleanup removes persisted state for any ID not present in activeIDs.
+	Cleanup(activeIDs []string) error
 }
 
 // NotifierService dispatches change notifications.
@@ -42,6 +44,8 @@ type MonitorService struct {
 	chromeClient *ChromeClient
 	storage      Storage
 	notifier     NotifierService
+	chromePath   string
+	chromeWsURL  string
 }
 
 // HTTPClient fetches page content over plain HTTP.
@@ -107,6 +111,8 @@ func NewMonitorService(monitors Monitors, storage Storage, notifier NotifierServ
 // it launches a local Chrome binary at chromePath. Chrome is only started when
 // at least one monitor has UseChrome set to true.
 func (ms *MonitorService) SetupChrome(chromePath, wsURL string) error {
+	ms.chromePath = chromePath
+	ms.chromeWsURL = wsURL
 	for _, m := range ms.monitors {
 		if !m.UseChrome {
 			continue
@@ -134,14 +140,41 @@ func (ms *MonitorService) AddMonitors(monitors ...Monitor) {
 	ms.monitors = append(ms.monitors, monitors...)
 }
 
-// Start initializes every monitor and begins polling. It returns immediately;
-// monitors run in background goroutines.
-func (ms *MonitorService) Start() {
+// Reload stops all running monitors, replaces them with the provided list, and
+// starts them again. The Chrome client is kept alive across reloads; it is only
+// initialized here if it has not been set up yet.
+func (ms *MonitorService) Reload(monitors Monitors) error {
 	for i := range ms.monitors {
+		if ms.monitors[i].started {
+			ms.monitors[i].Stop()
+		}
+	}
+	ms.wg.Wait()
+
+	ms.monitors = monitors
+	if ms.chromeClient == nil {
+		if err := ms.SetupChrome(ms.chromePath, ms.chromeWsURL); err != nil {
+			return err
+		}
+	}
+	ms.Start()
+	return nil
+}
+
+// Start initializes every monitor and begins polling. It returns immediately;
+// monitors run in background goroutines. It also cleans up state files for any
+// monitors that are no longer present (e.g. removed manually from the config).
+func (ms *MonitorService) Start() {
+	activeIDs := make([]string, len(ms.monitors))
+	for i, m := range ms.monitors {
+		activeIDs[i] = generateSHA1(m.Name)
 		ms.monitors[i].init(ms)
 		if err := ms.monitors[i].start(&ms.wg); err != nil {
 			log.Printf("monitor: failed to start %q: %v", ms.monitors[i].Name, err)
 		}
+	}
+	if err := ms.storage.Cleanup(activeIDs); err != nil {
+		log.Printf("monitor: cleanup storage: %v", err)
 	}
 }
 
@@ -191,7 +224,7 @@ func (m *Monitor) Stop() {
 }
 
 func (m *Monitor) init(ms *MonitorService) {
-	m.id = generateSHA1(m.URL)
+	m.id = generateSHA1(m.Name)
 	m.done = make(chan struct{}, 1)
 	m.ticker = time.NewTicker(m.Interval * time.Minute)
 	m.storage = ms.storage
