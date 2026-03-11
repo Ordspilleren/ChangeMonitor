@@ -454,6 +454,58 @@ textarea {
   background: var(--bg);
 }
 
+/* ─── Advanced section ───────────────────────────────────────────────── */
+
+.btn-toggle-advanced {
+  font-size: 13px;
+  padding: 5px 10px;
+  color: var(--text-muted);
+  border-color: transparent;
+  background: none;
+}
+
+.btn-toggle-advanced:hover:not(:disabled) {
+  background: var(--bg);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.advanced-section {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+}
+
+.header-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.header-row input {
+  flex: 1;
+}
+
+.btn-remove-header {
+  padding: 6px 10px;
+  color: var(--danger);
+  border-color: #fecaca;
+  flex-shrink: 0;
+}
+
+.btn-remove-header:hover:not(:disabled) {
+  background: var(--error-bg);
+  border-color: var(--danger);
+}
+
+.btn-add-header {
+  font-size: 13px;
+  padding: 5px 12px;
+  margin-top: 4px;
+}
+
 /* ─── Preview result ─────────────────────────────────────────────────── */
 
 .preview-result label {

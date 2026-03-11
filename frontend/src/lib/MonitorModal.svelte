@@ -9,15 +9,40 @@
 
   let { monitor, onsave, oncancel }: Props = $props()
 
-  let name = $state(monitor.name)
-  let url = $state(monitor.url)
-  let interval = $state(monitor.interval)
-  let useChrome = $state(monitor.useChrome)
-  let selectorType = $state(monitor.selector?.type ?? '')
-  let selectorPaths = $state((monitor.selector?.paths ?? []).join('\n'))
-  let filterContains = $state((monitor.filters?.contains ?? []).join('\n'))
-  let filterNotContains = $state((monitor.filters?.notContains ?? []).join('\n'))
-  let ignoreEmpty = $state(monitor.ignoreEmpty ?? false)
+  let name = $state('')
+  let url = $state('')
+  let interval = $state(0)
+  let useChrome = $state(false)
+  let selectorType = $state('')
+  let selectorPaths = $state('')
+  let filterContains = $state('')
+  let filterNotContains = $state('')
+  let ignoreEmpty = $state(false)
+  let showAdvanced = $state(false)
+  let httpHeaderEntries = $state<{ key: string; value: string }[]>([])
+
+  $effect(() => {
+    name = monitor.name
+    url = monitor.url
+    interval = monitor.interval
+    useChrome = monitor.useChrome
+    selectorType = monitor.selector?.type ?? ''
+    selectorPaths = (monitor.selector?.paths ?? []).join('\n')
+    filterContains = (monitor.filters?.contains ?? []).join('\n')
+    filterNotContains = (monitor.filters?.notContains ?? []).join('\n')
+    ignoreEmpty = monitor.ignoreEmpty ?? false
+    httpHeaderEntries = Object.entries(monitor.httpHeaders ?? {}).flatMap(([k, vals]) =>
+      vals.map((v) => ({ key: k, value: v }))
+    )
+  })
+
+  function addHeader(): void {
+    httpHeaderEntries = [...httpHeaderEntries, { key: '', value: '' }]
+  }
+
+  function removeHeader(index: number): void {
+    httpHeaderEntries = httpHeaderEntries.filter((_, i) => i !== index)
+  }
 
   let previewContent: string | null = $state(null)
   let previewError: string | null = $state(null)
@@ -31,6 +56,13 @@
     const paths = selectorPaths.split('\n').map((s) => s.trim()).filter(Boolean)
     const contains = filterContains.split('\n').map((s) => s.trim()).filter(Boolean)
     const notContains = filterNotContains.split('\n').map((s) => s.trim()).filter(Boolean)
+    const httpHeaders: Record<string, string[]> = {}
+    for (const { key, value } of httpHeaderEntries) {
+      const k = key.trim()
+      if (!k) continue
+      if (!httpHeaders[k]) httpHeaders[k] = []
+      httpHeaders[k].push(value)
+    }
     onsave({
       name: name.trim(),
       url: url.trim(),
@@ -39,6 +71,7 @@
       selector: selectorType ? { type: selectorType, paths } : undefined,
       filters: (contains.length || notContains.length) ? { contains, notContains } : undefined,
       ignoreEmpty,
+      httpHeaders: Object.keys(httpHeaders).length ? httpHeaders : undefined,
     })
   }
 
@@ -193,6 +226,48 @@
           Ignore empty content (skip notification if page returns nothing)
         </label>
       </div>
+
+      <div class="form-group">
+        <button
+          type="button"
+          class="btn btn-toggle-advanced"
+          onclick={() => (showAdvanced = !showAdvanced)}
+          aria-expanded={showAdvanced}
+        >
+          {showAdvanced ? '▾' : '▸'} Advanced
+        </button>
+      </div>
+
+      {#if showAdvanced}
+        <div class="form-group advanced-section">
+          <label>HTTP Headers</label>
+          {#each httpHeaderEntries as entry, i}
+            <div class="header-row">
+              <input
+                type="text"
+                bind:value={entry.key}
+                placeholder="Header name"
+                aria-label="Header name"
+              />
+              <input
+                type="text"
+                bind:value={entry.value}
+                placeholder="Value"
+                aria-label="Header value"
+              />
+              <button
+                type="button"
+                class="btn btn-remove-header"
+                onclick={() => removeHeader(i)}
+                aria-label="Remove header"
+              >×</button>
+            </div>
+          {/each}
+          <button type="button" class="btn btn-add-header" onclick={addHeader}>
+            + Add Header
+          </button>
+        </div>
+      {/if}
 
       {#if previewContent !== null || previewError !== null}
         <div class="form-group preview-result">
