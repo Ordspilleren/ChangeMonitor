@@ -8,6 +8,14 @@ export interface Filters {
   notContains?: string[]
 }
 
+export interface ProductDetection {
+  enabled: boolean
+  trackStock?: boolean
+  trackPrice?: boolean
+  minPrice?: number
+  maxPrice?: number
+}
+
 export interface Monitor {
   name: string
   url: string
@@ -17,6 +25,7 @@ export interface Monitor {
   selector?: Selector
   filters?: Filters
   ignoreEmpty?: boolean
+  productDetection?: ProductDetection
 }
 
 export interface PushoverConfig {

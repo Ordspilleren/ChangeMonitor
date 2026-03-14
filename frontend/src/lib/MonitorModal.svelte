@@ -18,6 +18,11 @@
   let filterContains = $state('')
   let filterNotContains = $state('')
   let ignoreEmpty = $state(false)
+  let productDetectionEnabled = $state(false)
+  let trackStock = $state(false)
+  let trackPrice = $state(false)
+  let minPrice = $state<number | undefined>(undefined)
+  let maxPrice = $state<number | undefined>(undefined)
   let showAdvanced = $state(false)
   let httpHeaderEntries = $state<{ key: string; value: string }[]>([])
 
@@ -31,6 +36,11 @@
     filterContains = (monitor.filters?.contains ?? []).join('\n')
     filterNotContains = (monitor.filters?.notContains ?? []).join('\n')
     ignoreEmpty = monitor.ignoreEmpty ?? false
+    productDetectionEnabled = monitor.productDetection?.enabled ?? false
+    trackStock = monitor.productDetection?.trackStock ?? false
+    trackPrice = monitor.productDetection?.trackPrice ?? false
+    minPrice = monitor.productDetection?.minPrice
+    maxPrice = monitor.productDetection?.maxPrice
     httpHeaderEntries = Object.entries(monitor.httpHeaders ?? {}).flatMap(([k, vals]) =>
       vals.map((v) => ({ key: k, value: v }))
     )
@@ -45,6 +55,7 @@
   }
 
   let previewContent: string | null = $state(null)
+  let previewProductState: { inStock: boolean; price: number } | null = $state(null)
   let previewError: string | null = $state(null)
   let previewing = $state(false)
 
@@ -63,6 +74,16 @@
       if (!httpHeaders[k]) httpHeaders[k] = []
       httpHeaders[k].push(value)
     }
+    let productDetection = undefined
+    if (productDetectionEnabled) {
+      productDetection = {
+        enabled: true,
+        trackStock,
+        trackPrice,
+        minPrice: trackPrice && minPrice !== undefined ? minPrice : undefined,
+        maxPrice: trackPrice && maxPrice !== undefined ? maxPrice : undefined,
+      }
+    }
     onsave({
       name: name.trim(),
       url: url.trim(),
@@ -72,29 +93,39 @@
       filters: (contains.length || notContains.length) ? { contains, notContains } : undefined,
       ignoreEmpty,
       httpHeaders: Object.keys(httpHeaders).length ? httpHeaders : undefined,
+      productDetection,
     })
   }
 
   async function preview(): Promise<void> {
     previewContent = null
+    previewProductState = null
     previewError = null
     previewing = true
     try {
       const paths = selectorPaths.split('\n').map((s) => s.trim()).filter(Boolean)
+      const body: Record<string, unknown> = {
+        url: url.trim(),
+        useChrome,
+        selector: selectorType ? { type: selectorType, paths } : undefined,
+      }
+      if (productDetectionEnabled) {
+        body.productDetection = { enabled: true, trackStock, trackPrice, minPrice, maxPrice }
+      }
       const res = await fetch('/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: url.trim(),
-          useChrome,
-          selector: selectorType ? { type: selectorType, paths } : undefined,
-        }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
         previewError = await res.text()
       } else {
         const data = await res.json()
-        previewContent = data.content
+        if (data.productState !== undefined) {
+          previewProductState = data.productState
+        } else {
+          previewContent = data.content ?? ''
+        }
       }
     } catch (e) {
       previewError = String(e)
@@ -228,6 +259,54 @@
       </div>
 
       <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" bind:checked={productDetectionEnabled} />
+          Enable product detection (stock &amp; price tracking)
+        </label>
+        <span class="hint">Automatically extract stock status and price from single-product pages. Replaces the normal content-change check.</span>
+      </div>
+
+      {#if productDetectionEnabled}
+        <div class="form-group product-detection-section">
+          <label class="checkbox-label">
+            <input type="checkbox" bind:checked={trackStock} />
+            Notify when stock status changes
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" bind:checked={trackPrice} />
+            Notify when price changes
+          </label>
+          {#if trackPrice}
+            <div class="price-thresholds">
+              <div class="price-threshold-row">
+                <label for="m-min-price">Min price (notify if price ≥)</label>
+                <input
+                  id="m-min-price"
+                  type="number"
+                  bind:value={minPrice}
+                  min="0"
+                  step="0.01"
+                  placeholder="No minimum"
+                />
+              </div>
+              <div class="price-threshold-row">
+                <label for="m-max-price">Max price (notify if price ≤)</label>
+                <input
+                  id="m-max-price"
+                  type="number"
+                  bind:value={maxPrice}
+                  min="0"
+                  step="0.01"
+                  placeholder="No maximum"
+                />
+              </div>
+              <span class="hint">Leave blank to notify on any price change. Set max price to get alerts when an item drops below a target price.</span>
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      <div class="form-group">
         <button
           type="button"
           class="btn btn-toggle-advanced"
@@ -269,11 +348,30 @@
         </div>
       {/if}
 
-      {#if previewContent !== null || previewError !== null}
+      {#if previewContent !== null || previewProductState !== null || previewError !== null}
         <div class="form-group preview-result">
           <label>Preview</label>
           {#if previewError}
             <div class="preview-error">{previewError}</div>
+          {:else if previewProductState !== null}
+            <div class="preview-product-state">
+              {#if previewProductState === undefined}
+                <span class="preview-no-product">No product data (stock/price) detected on this page. The page may not include schema.org JSON-LD or Open Graph product meta tags.</span>
+              {:else}
+                <div class="product-state-row">
+                  <span class="product-state-label">In Stock</span>
+                  <span class="product-state-value {previewProductState.inStock ? 'in-stock' : 'out-of-stock'}">
+                    {previewProductState.inStock ? 'Yes' : 'No'}
+                  </span>
+                </div>
+                <div class="product-state-row">
+                  <span class="product-state-label">Price</span>
+                  <span class="product-state-value">
+                    {previewProductState.price > 0 ? previewProductState.price.toFixed(2) : 'Not detected'}
+                  </span>
+                </div>
+              {/if}
+            </div>
           {:else}
             <pre class="preview-content">{previewContent}</pre>
           {/if}

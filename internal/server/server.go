@@ -50,14 +50,14 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content, err := s.monitorService.Preview(req)
+	result, err := s.monitorService.Preview(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"content": content})
+	json.NewEncoder(w).Encode(result)
 }
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {

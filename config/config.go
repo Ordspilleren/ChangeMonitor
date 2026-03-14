@@ -17,11 +17,16 @@ type Config struct {
 // Fields are optional; only configured notifiers will be initialized.
 type NotifiersConfig struct {
 	Pushover *PushoverConfig `json:"pushover,omitempty"`
+	Logger   *LoggerConfig   `json:"logger,omitempty"`
 }
 
 type PushoverConfig struct {
 	APIToken string `json:"apiToken"`
 	UserKey  string `json:"userKey"`
+}
+
+type LoggerConfig struct {
+	Enabled bool `json:"enabled"`
 }
 
 // Load reads and parses a JSON config file.

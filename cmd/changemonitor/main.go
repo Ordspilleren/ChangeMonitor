@@ -9,6 +9,7 @@ import (
 	"github.com/Ordspilleren/ChangeMonitor/internal/server"
 	"github.com/Ordspilleren/ChangeMonitor/monitor"
 	"github.com/Ordspilleren/ChangeMonitor/notifier"
+	"github.com/Ordspilleren/ChangeMonitor/notifier/logger"
 	"github.com/Ordspilleren/ChangeMonitor/notifier/pushover"
 	"github.com/Ordspilleren/ChangeMonitor/storage"
 )
@@ -61,6 +62,9 @@ func InitNotifiers() notifier.Notifiers {
 	var notifiers notifier.Notifiers
 	if config.Notifiers.Pushover != nil {
 		notifiers = append(notifiers, pushover.New(config.Notifiers.Pushover.APIToken, config.Notifiers.Pushover.UserKey))
+	}
+	if config.Notifiers.Logger != nil && config.Notifiers.Logger.Enabled {
+		notifiers = append(notifiers, logger.New())
 	}
 	return notifiers
 }
