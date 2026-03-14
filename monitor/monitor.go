@@ -66,7 +66,6 @@ type ChromeClient struct {
 // single-product pages. When enabled, the normal content-hash check is
 // replaced by a structured product-state comparison.
 type ProductDetection struct {
-	Enabled    bool     `json:"enabled"`
 	TrackStock bool     `json:"trackStock,omitempty"`
 	TrackPrice bool     `json:"trackPrice,omitempty"`
 	MinPrice   *float64 `json:"minPrice,omitempty"`
@@ -186,13 +185,10 @@ func (ms *MonitorService) Reload(monitors Monitors) error {
 // monitors run in background goroutines. It also cleans up state files for any
 // monitors that are no longer present (e.g. removed manually from the config).
 func (ms *MonitorService) Start() {
-	activeIDs := make([]string, 0, len(ms.monitors)*2)
+	activeIDs := make([]string, 0, len(ms.monitors))
 	for i, m := range ms.monitors {
 		id := generateSHA1(m.Name)
 		activeIDs = append(activeIDs, id)
-		if m.ProductDetection != nil && m.ProductDetection.Enabled {
-			activeIDs = append(activeIDs, id+"_product")
-		}
 		ms.monitors[i].init(ms)
 		if err := ms.monitors[i].start(&ms.wg); err != nil {
 			log.Printf("monitor: failed to start %q: %v", ms.monitors[i].Name, err)
@@ -253,7 +249,7 @@ func (ms *MonitorService) Preview(req PreviewRequest) (PreviewResult, error) {
 	}
 	defer content.Close()
 
-	if req.ProductDetection != nil && req.ProductDetection.Enabled {
+	if req.ProductDetection != nil && (req.ProductDetection.TrackStock || req.ProductDetection.TrackPrice) {
 		body, err := io.ReadAll(content)
 		if err != nil {
 			return PreviewResult{}, fmt.Errorf("preview: read body: %w", err)
@@ -357,7 +353,7 @@ func (m *Monitor) check() {
 	}
 	defer content.Close()
 
-	if m.ProductDetection != nil && m.ProductDetection.Enabled {
+	if m.ProductDetection != nil && (m.ProductDetection.TrackStock || m.ProductDetection.TrackPrice) {
 		m.checkProduct(content)
 		return
 	}
@@ -396,12 +392,6 @@ func (m *Monitor) check() {
 }
 
 func (m *Monitor) checkProduct(content io.ReadCloser) {
-	pd := m.ProductDetection
-	if !pd.TrackStock && !pd.TrackPrice {
-		log.Printf("monitor: product detection enabled but neither stock nor price tracking is configured")
-		return
-	}
-
 	body, err := io.ReadAll(content)
 	if err != nil {
 		log.Printf("monitor: product detection: read body: %v", err)
@@ -419,7 +409,7 @@ func (m *Monitor) checkProduct(content io.ReadCloser) {
 	}
 
 	// Load and persist product state.
-	storedJSON := m.storage.GetContent(m.id + "_product")
+	storedJSON := m.storage.GetContent(m.id)
 	var stored *ProductState
 	if storedJSON != "" {
 		stored = &ProductState{}
@@ -429,13 +419,14 @@ func (m *Monitor) checkProduct(content io.ReadCloser) {
 		}
 	}
 	stateJSON, _ := json.Marshal(current)
-	m.storage.WriteContent(m.id+"_product", string(stateJSON))
+	m.storage.WriteContent(m.id, string(stateJSON))
 
 	if stored == nil {
 		log.Printf("monitor: initial product state recorded for %q (inStock=%v price=%.2f)", m.Name, current.InStock, current.Price)
 		return
 	}
 
+	pd := m.ProductDetection
 	var changes []string
 
 	if pd.TrackStock && current.InStock != stored.InStock {

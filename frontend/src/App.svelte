@@ -5,6 +5,10 @@
   import type { Config, Monitor, Notification } from './types'
 
   let config: Config | null = $state(null)
+  let savedConfig: string | null = $state(null)
+  let hasUnsavedChanges = $derived(
+    config !== null && savedConfig !== null && JSON.stringify(config) !== savedConfig
+  )
   let loading = $state(true)
   let saving = $state(false)
   let notification: Notification | null = $state(null)
@@ -22,6 +26,7 @@
       config.monitors = config.monitors ?? []
       if (!config.notifiers) config.notifiers = {}
       if (!config.notifiers.pushover) config.notifiers.pushover = { apiToken: '', userKey: '' }
+      savedConfig = JSON.stringify(config)
     } catch (e) {
       showNotif('error', 'Failed to load configuration: ' + (e as Error).message)
     } finally {
@@ -48,7 +53,8 @@
         const text = await res.text()
         throw new Error(text || `Server returned ${res.status}`)
       }
-      showNotif('success', 'Configuration saved. Monitor changes take effect on restart.')
+      savedConfig = JSON.stringify(config)
+      showNotif('success', 'Configuration saved.')
     } catch (e) {
       showNotif('error', 'Failed to save: ' + (e as Error).message)
     } finally {
@@ -96,7 +102,10 @@
         </svg>
         Change Monitor
       </div>
-      <button
+      {#if hasUnsavedChanges}
+          <span class="unsaved-indicator">Unsaved changes</span>
+        {/if}
+        <button
         class="btn btn-primary"
         onclick={save}
         disabled={saving || loading || !config}
@@ -150,6 +159,9 @@
                     {/if}
                     {#if monitor.ignoreEmpty}
                       <span class="tag">Ignore empty</span>
+                    {/if}
+                    {#if monitor.productDetection?.trackStock || monitor.productDetection?.trackPrice}
+                      <span class="tag tag-product">Product detection</span>
                     {/if}
                   </div>
                 </div>

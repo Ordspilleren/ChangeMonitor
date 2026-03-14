@@ -36,7 +36,7 @@
     filterContains = (monitor.filters?.contains ?? []).join('\n')
     filterNotContains = (monitor.filters?.notContains ?? []).join('\n')
     ignoreEmpty = monitor.ignoreEmpty ?? false
-    productDetectionEnabled = monitor.productDetection?.enabled ?? false
+    productDetectionEnabled = monitor.productDetection?.trackPrice || monitor.productDetection?.trackStock || false
     trackStock = monitor.productDetection?.trackStock ?? false
     trackPrice = monitor.productDetection?.trackPrice ?? false
     minPrice = monitor.productDetection?.minPrice
@@ -77,7 +77,6 @@
     let productDetection = undefined
     if (productDetectionEnabled) {
       productDetection = {
-        enabled: true,
         trackStock,
         trackPrice,
         minPrice: trackPrice && minPrice !== undefined ? minPrice : undefined,
@@ -110,7 +109,7 @@
         selector: selectorType ? { type: selectorType, paths } : undefined,
       }
       if (productDetectionEnabled) {
-        body.productDetection = { enabled: true, trackStock, trackPrice, minPrice, maxPrice }
+        body.productDetection = { trackStock, trackPrice, minPrice, maxPrice }
       }
       const res = await fetch('/api/preview', {
         method: 'POST',

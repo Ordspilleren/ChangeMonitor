@@ -9,7 +9,6 @@ export interface Filters {
 }
 
 export interface ProductDetection {
-  enabled: boolean
   trackStock?: boolean
   trackPrice?: boolean
   minPrice?: number
