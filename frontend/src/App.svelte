@@ -63,7 +63,7 @@
   }
 
   function openAdd(): void {
-    editingMonitor = { name: '', url: '', useChrome: false, interval: 5 }
+    editingMonitor = { name: '', url: '', useChrome: false, interval: 5, generic: { selector: { type: '', paths: [] } } }
     editIndex = -1
     showModal = true
   }
@@ -154,13 +154,10 @@
                     {#if monitor.useChrome}
                       <span class="tag tag-site">Chrome</span>
                     {/if}
-                    {#if monitor.selector?.type}
-                      <span class="tag">{monitor.selector.type.toUpperCase()} selector</span>
+                    {#if monitor.generic}
+                      <span class="tag">Generic</span>
                     {/if}
-                    {#if monitor.ignoreEmpty}
-                      <span class="tag">Ignore empty</span>
-                    {/if}
-                    {#if monitor.productDetection?.trackStock || monitor.productDetection?.trackPrice}
+                    {#if monitor.product}
                       <span class="tag tag-product">Product detection</span>
                     {/if}
                   </div>

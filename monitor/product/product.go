@@ -1,4 +1,4 @@
-package monitor
+package product
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Ordspilleren/ChangeMonitor/monitor"
 	"github.com/PuerkitoBio/goquery"
 )
 
@@ -30,7 +31,12 @@ type ProductState struct {
 	Price   float64 `json:"price"`
 }
 
-func (m *Monitor) checkProduct(content io.ReadCloser) {
+// ProductFeature performs product stock and price change detection.
+type ProductFeature struct {
+	Detection ProductDetection
+}
+
+func (p *ProductFeature) Check(monitor *monitor.Monitor, content io.ReadCloser) {
 	body, err := io.ReadAll(content)
 	if err != nil {
 		log.Printf("monitor: product detection: read body: %v", err)
@@ -43,12 +49,11 @@ func (m *Monitor) checkProduct(content io.ReadCloser) {
 		return
 	}
 	if current == nil {
-		log.Printf("monitor: product detection: no product data found on page %s", m.URL)
+		log.Printf("monitor: product detection: no product data found on page %s", monitor.URL)
 		return
 	}
 
-	// Load and persist product state.
-	storedJSON := m.storage.GetContent(m.id)
+	storedJSON := monitor.Storage.GetContent(monitor.ID)
 	var stored *ProductState
 	if storedJSON != "" {
 		stored = &ProductState{}
@@ -58,14 +63,14 @@ func (m *Monitor) checkProduct(content io.ReadCloser) {
 		}
 	}
 	stateJSON, _ := json.Marshal(current)
-	m.storage.WriteContent(m.id, string(stateJSON))
+	monitor.Storage.WriteContent(monitor.ID, string(stateJSON))
 
 	if stored == nil {
-		log.Printf("monitor: initial product state recorded for %q (inStock=%v price=%.2f)", m.Name, current.InStock, current.Price)
+		log.Printf("monitor: initial product state recorded for %q (inStock=%v price=%.2f)", monitor.Name, current.InStock, current.Price)
 		return
 	}
 
-	pd := m.ProductDetection
+	pd := p.Detection
 	var changes []string
 
 	if pd.TrackStock && current.InStock != stored.InStock {
@@ -85,19 +90,33 @@ func (m *Monitor) checkProduct(content io.ReadCloser) {
 	}
 
 	if len(changes) == 0 {
-		log.Printf("monitor: no relevant product change for %q, next check in %s", m.Name, m.Interval*time.Minute)
+		log.Printf("monitor: no relevant product change for %q, next check in %s", monitor.Name, monitor.Interval*time.Minute)
 		return
 	}
 
 	changeStr := strings.Join(changes, "; ")
-	log.Printf("monitor: %q product change: %s", m.Name, changeStr)
-	if err := m.notifier.Notify(
+	log.Printf("monitor: %q product change: %s", monitor.Name, changeStr)
+	if err := monitor.Notifier.Notify(
 		context.Background(),
-		fmt.Sprintf("ChangeMonitor: %s – %s", m.Name, changeStr),
-		fmt.Sprintf("%s\n\n%s\n\nURL: %s", m.Name, changeStr, m.URL),
+		fmt.Sprintf("ChangeMonitor: %s – %s", monitor.Name, changeStr),
+		fmt.Sprintf("%s\n\n%s\n\nURL: %s", monitor.Name, changeStr, monitor.URL),
 	); err != nil {
 		log.Printf("monitor: notify: %v", err)
 	}
+}
+
+// Preview extracts the current product state without persistence.
+func (p *ProductFeature) Preview(content io.ReadCloser) (monitor.PreviewResult, error) {
+	body, err := io.ReadAll(content)
+	if err != nil {
+		return monitor.PreviewResult{}, fmt.Errorf("preview: read body: %w", err)
+	}
+	state, err := extractProductData(body)
+	if err != nil {
+		return monitor.PreviewResult{}, err
+	}
+	stateString := fmt.Sprintf("In Stock: %v\nPrice: %.2f", state.InStock, state.Price)
+	return monitor.PreviewResult{Content: stateString}, nil
 }
 
 // extractProductData scans raw HTML for structured product information.
@@ -109,7 +128,6 @@ func extractProductData(body []byte) (*ProductState, error) {
 		return nil, fmt.Errorf("extract product: parse html: %w", err)
 	}
 
-	// --- JSON-LD ---
 	var state *ProductState
 	doc.Find(`script[type="application/ld+json"]`).EachWithBreak(func(_ int, s *goquery.Selection) bool {
 		raw := strings.TrimSpace(s.Text())
@@ -120,7 +138,6 @@ func extractProductData(body []byte) (*ProductState, error) {
 		if err := json.Unmarshal([]byte(raw), &top); err != nil {
 			return true
 		}
-		// @graph wrapper
 		if m, ok := top.(map[string]any); ok {
 			if graph, ok := m["@graph"].([]any); ok {
 				for _, item := range graph {
@@ -132,7 +149,6 @@ func extractProductData(body []byte) (*ProductState, error) {
 				return true
 			}
 		}
-		// Array of nodes
 		if arr, ok := top.([]any); ok {
 			for _, item := range arr {
 				if ps := productStateFromLDNode(item); ps != nil {
@@ -142,7 +158,6 @@ func extractProductData(body []byte) (*ProductState, error) {
 			}
 			return true
 		}
-		// Single node
 		if ps := productStateFromLDNode(top); ps != nil {
 			state = ps
 			return false
@@ -153,7 +168,6 @@ func extractProductData(body []byte) (*ProductState, error) {
 		return state, nil
 	}
 
-	// --- Open Graph / product meta tags ---
 	var price float64
 	var hasPrice, hasStock, inStock bool
 	doc.Find("meta").Each(func(_ int, s *goquery.Selection) {
@@ -230,7 +244,6 @@ func productStateFromOffer(offer map[string]any) *ProductState {
 
 func isInStockString(s string) bool {
 	lower := strings.ToLower(s)
-	// Explicit out-of-stock terms take priority.
 	for _, term := range []string{"outofstock", "out_of_stock", "soldout", "sold_out", "discontinued"} {
 		if strings.Contains(lower, term) {
 			return false
@@ -247,21 +260,17 @@ func isInStockString(s string) bool {
 func parsePrice(s string) (float64, bool) {
 	s = strings.TrimSpace(s)
 
-	// If both separators are present, the last one is the decimal separator.
 	lastComma := strings.LastIndex(s, ",")
 	lastDot := strings.LastIndex(s, ".")
 
 	switch {
 	case lastComma > lastDot:
-		// Danish/German style: 1.299,95 — comma is decimal
 		s = strings.ReplaceAll(s, ".", "")
 		s = strings.ReplaceAll(s, ",", ".")
 	default:
-		// English style: 1,299.95 — dot is decimal
 		s = strings.ReplaceAll(s, ",", "")
 	}
 
-	// Strip any remaining non-numeric characters (currency symbols etc.)
 	s = strings.Map(func(r rune) rune {
 		if r >= '0' && r <= '9' || r == '.' {
 			return r

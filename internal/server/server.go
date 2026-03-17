@@ -44,13 +44,18 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req monitor.PreviewRequest
+	var req appcfg.MonitorConfig
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	runtimeMonitor, err := req.ToRuntime()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
-	result, err := s.monitorService.Preview(req)
+	result, err := s.monitorService.Preview(runtimeMonitor)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -99,8 +104,13 @@ func (s *Server) postConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.config = &newConfig
+	runtimeMonitors, err := newConfig.RuntimeMonitors()
+	if err != nil {
+		http.Error(w, "config saved but monitor config is invalid: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 
-	if err := s.monitorService.Reload(newConfig.Monitors); err != nil {
+	if err := s.monitorService.Reload(runtimeMonitors); err != nil {
 		log.Printf("server: config reload: %v", err)
 		http.Error(w, "config saved but monitors failed to reload: "+err.Error(), http.StatusInternalServerError)
 		return

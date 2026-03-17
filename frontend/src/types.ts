@@ -8,11 +8,17 @@ export interface Filters {
   notContains?: string[]
 }
 
-export interface ProductDetection {
+export interface ProductFeature {
   trackStock?: boolean
   trackPrice?: boolean
   minPrice?: number
   maxPrice?: number
+}
+
+export interface GenericFeature {
+  selector: Selector
+  filters?: Filters
+  ignoreEmpty?: boolean
 }
 
 export interface Monitor {
@@ -21,10 +27,8 @@ export interface Monitor {
   httpHeaders?: Record<string, string[]>
   useChrome: boolean
   interval: number
-  selector?: Selector
-  filters?: Filters
-  ignoreEmpty?: boolean
-  productDetection?: ProductDetection
+  generic?: GenericFeature
+  product?: ProductFeature
 }
 
 export interface PushoverConfig {

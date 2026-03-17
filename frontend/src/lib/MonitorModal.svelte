@@ -18,7 +18,7 @@
   let filterContains = $state('')
   let filterNotContains = $state('')
   let ignoreEmpty = $state(false)
-  let productDetectionEnabled = $state(false)
+  let featureType = $state<'generic' | 'product'>('generic')
   let trackStock = $state(false)
   let trackPrice = $state(false)
   let minPrice = $state<number | undefined>(undefined)
@@ -31,16 +31,16 @@
     url = monitor.url
     interval = monitor.interval
     useChrome = monitor.useChrome
-    selectorType = monitor.selector?.type ?? ''
-    selectorPaths = (monitor.selector?.paths ?? []).join('\n')
-    filterContains = (monitor.filters?.contains ?? []).join('\n')
-    filterNotContains = (monitor.filters?.notContains ?? []).join('\n')
-    ignoreEmpty = monitor.ignoreEmpty ?? false
-    productDetectionEnabled = monitor.productDetection?.trackPrice || monitor.productDetection?.trackStock || false
-    trackStock = monitor.productDetection?.trackStock ?? false
-    trackPrice = monitor.productDetection?.trackPrice ?? false
-    minPrice = monitor.productDetection?.minPrice
-    maxPrice = monitor.productDetection?.maxPrice
+    selectorType = monitor.generic?.selector?.type ?? ''
+    selectorPaths = (monitor.generic?.selector?.paths ?? []).join('\n')
+    filterContains = (monitor.generic?.filters?.contains ?? []).join('\n')
+    filterNotContains = (monitor.generic?.filters?.notContains ?? []).join('\n')
+    ignoreEmpty = monitor.generic?.ignoreEmpty ?? false
+    featureType = monitor.product !== undefined ? 'product' : 'generic'
+    trackStock = monitor.product?.trackStock ?? false
+    trackPrice = monitor.product?.trackPrice ?? false
+    minPrice = monitor.product?.minPrice
+    maxPrice = monitor.product?.maxPrice
     httpHeaderEntries = Object.entries(monitor.httpHeaders ?? {}).flatMap(([k, vals]) =>
       vals.map((v) => ({ key: k, value: v }))
     )
@@ -55,12 +55,11 @@
   }
 
   let previewContent: string | null = $state(null)
-  let previewProductState: { inStock: boolean; price: number } | null = $state(null)
   let previewError: string | null = $state(null)
   let previewing = $state(false)
 
-  let valid = $derived(name.trim() !== '' && url.trim() !== '' && interval > 0)
-  let canPreview = $derived(url.trim() !== '')
+  let valid = $derived(name.trim() !== '' && url.trim() !== '' && interval > 0 && (featureType !== 'product' || trackStock || trackPrice))
+  let canPreview = $derived(url.trim() !== '' && (featureType !== 'product' || trackStock || trackPrice))
 
   function save(): void {
     if (!valid) return
@@ -74,13 +73,20 @@
       if (!httpHeaders[k]) httpHeaders[k] = []
       httpHeaders[k].push(value)
     }
-    let productDetection = undefined
-    if (productDetectionEnabled) {
-      productDetection = {
+    let generic = undefined
+    let product = undefined
+    if (featureType === 'product') {
+      product = {
         trackStock,
         trackPrice,
         minPrice: trackPrice && minPrice !== undefined ? minPrice : undefined,
         maxPrice: trackPrice && maxPrice !== undefined ? maxPrice : undefined,
+      }
+    } else {
+      generic = {
+        selector: { type: selectorType, paths },
+        filters: (contains.length || notContains.length) ? { contains, notContains } : undefined,
+        ignoreEmpty,
       }
     }
     onsave({
@@ -88,29 +94,52 @@
       url: url.trim(),
       interval,
       useChrome,
-      selector: selectorType ? { type: selectorType, paths } : undefined,
-      filters: (contains.length || notContains.length) ? { contains, notContains } : undefined,
-      ignoreEmpty,
       httpHeaders: Object.keys(httpHeaders).length ? httpHeaders : undefined,
-      productDetection,
+      generic,
+      product,
     })
   }
 
   async function preview(): Promise<void> {
     previewContent = null
-    previewProductState = null
     previewError = null
     previewing = true
     try {
       const paths = selectorPaths.split('\n').map((s) => s.trim()).filter(Boolean)
+      const httpHeaders: Record<string, string[]> = {}
+      for (const { key, value } of httpHeaderEntries) {
+        const k = key.trim()
+        if (!k) continue
+        if (!httpHeaders[k]) httpHeaders[k] = []
+        httpHeaders[k].push(value)
+      }
+      let generic = undefined
+      let product = undefined
+      if (featureType === 'product') {
+        product = {
+          trackStock,
+          trackPrice,
+          minPrice,
+          maxPrice,
+        }
+      } else {
+        const contains = filterContains.split('\n').map((s) => s.trim()).filter(Boolean)
+        const notContains = filterNotContains.split('\n').map((s) => s.trim()).filter(Boolean)
+        generic = {
+          selector: { type: selectorType, paths },
+          filters: (contains.length || notContains.length) ? { contains, notContains } : undefined,
+          ignoreEmpty,
+        }
+      }
       const body: Record<string, unknown> = {
+        name: name.trim() || 'Preview',
         url: url.trim(),
+        interval: interval > 0 ? interval : 1,
         useChrome,
-        selector: selectorType ? { type: selectorType, paths } : undefined,
+        generic,
+        product,
       }
-      if (productDetectionEnabled) {
-        body.productDetection = { trackStock, trackPrice, minPrice, maxPrice }
-      }
+      if (Object.keys(httpHeaders).length) body.httpHeaders = httpHeaders
       const res = await fetch('/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,11 +149,7 @@
         previewError = await res.text()
       } else {
         const data = await res.json()
-        if (data.productState !== undefined) {
-          previewProductState = data.productState
-        } else {
-          previewContent = data.content ?? ''
-        }
+        previewContent = data.content ?? ''
       }
     } catch (e) {
       previewError = String(e)
@@ -205,67 +230,74 @@
       </div>
 
       <div class="form-group">
-        <label for="m-selector-type">Selector Type</label>
-        <select id="m-selector-type" bind:value={selectorType}>
-          <option value="">None (full page text)</option>
-          <option value="css">CSS</option>
-          <option value="json">JSON (gjson paths)</option>
+        <label for="m-feature-type">Detection Feature</label>
+        <select id="m-feature-type" bind:value={featureType}>
+          <option value="generic">Generic (page content)</option>
+          <option value="product">Product (stock &amp; price)</option>
         </select>
+        <span class="hint">
+          {featureType === 'product'
+            ? 'Automatically extract stock status and price from single-product pages.'
+            : 'Monitor page content for changes using selectors and filters.'}
+        </span>
       </div>
 
-      {#if selectorType}
+      {#if featureType === 'generic'}
         <div class="form-group">
-          <label for="m-selector-paths">Selector Paths</label>
+          <label for="m-selector-type">Selector Type</label>
+          <select id="m-selector-type" bind:value={selectorType}>
+            <option value="">None (full page text)</option>
+            <option value="css">CSS</option>
+            <option value="json">JSON (gjson paths)</option>
+          </select>
+        </div>
+
+        {#if selectorType}
+          <div class="form-group">
+            <label for="m-selector-paths">Selector Paths</label>
+            <textarea
+              id="m-selector-paths"
+              bind:value={selectorPaths}
+              rows="3"
+              placeholder="One path per line"
+            ></textarea>
+            <span class="hint">
+              {selectorType === 'css'
+                ? 'CSS selectors, one per line. e.g. #price, .stock-status'
+                : 'gjson paths, one per line. e.g. data.price, data.items.#.name'}
+            </span>
+          </div>
+        {/if}
+
+        <div class="form-group">
+          <label for="m-contains">Contains filter</label>
           <textarea
-            id="m-selector-paths"
-            bind:value={selectorPaths}
-            rows="3"
-            placeholder="One path per line"
+            id="m-contains"
+            bind:value={filterContains}
+            rows="2"
+            placeholder="One value per line — only notify when content contains this text"
           ></textarea>
-          <span class="hint">
-            {selectorType === 'css'
-              ? 'CSS selectors, one per line. e.g. #price, .stock-status'
-              : 'gjson paths, one per line. e.g. data.price, data.items.#.name'}
-          </span>
+        </div>
+
+        <div class="form-group">
+          <label for="m-not-contains">Does-not-contain filter</label>
+          <textarea
+            id="m-not-contains"
+            bind:value={filterNotContains}
+            rows="2"
+            placeholder="One value per line — only notify when content does NOT contain this text"
+          ></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" bind:checked={ignoreEmpty} />
+            Ignore empty content (skip notification if page returns nothing)
+          </label>
         </div>
       {/if}
 
-      <div class="form-group">
-        <label for="m-contains">Contains filter</label>
-        <textarea
-          id="m-contains"
-          bind:value={filterContains}
-          rows="2"
-          placeholder="One value per line — only notify when content contains this text"
-        ></textarea>
-      </div>
-
-      <div class="form-group">
-        <label for="m-not-contains">Does-not-contain filter</label>
-        <textarea
-          id="m-not-contains"
-          bind:value={filterNotContains}
-          rows="2"
-          placeholder="One value per line — only notify when content does NOT contain this text"
-        ></textarea>
-      </div>
-
-      <div class="form-group">
-        <label class="checkbox-label">
-          <input type="checkbox" bind:checked={ignoreEmpty} />
-          Ignore empty content (skip notification if page returns nothing)
-        </label>
-      </div>
-
-      <div class="form-group">
-        <label class="checkbox-label">
-          <input type="checkbox" bind:checked={productDetectionEnabled} />
-          Enable product detection (stock &amp; price tracking)
-        </label>
-        <span class="hint">Automatically extract stock status and price from single-product pages. Replaces the normal content-change check.</span>
-      </div>
-
-      {#if productDetectionEnabled}
+      {#if featureType === 'product'}
         <div class="form-group product-detection-section">
           <label class="checkbox-label">
             <input type="checkbox" bind:checked={trackStock} />
@@ -347,30 +379,11 @@
         </div>
       {/if}
 
-      {#if previewContent !== null || previewProductState !== null || previewError !== null}
+      {#if previewContent !== null || previewError !== null}
         <div class="form-group preview-result">
           <label>Preview</label>
           {#if previewError}
             <div class="preview-error">{previewError}</div>
-          {:else if previewProductState !== null}
-            <div class="preview-product-state">
-              {#if previewProductState === undefined}
-                <span class="preview-no-product">No product data (stock/price) detected on this page. The page may not include schema.org JSON-LD or Open Graph product meta tags.</span>
-              {:else}
-                <div class="product-state-row">
-                  <span class="product-state-label">In Stock</span>
-                  <span class="product-state-value {previewProductState.inStock ? 'in-stock' : 'out-of-stock'}">
-                    {previewProductState.inStock ? 'Yes' : 'No'}
-                  </span>
-                </div>
-                <div class="product-state-row">
-                  <span class="product-state-label">Price</span>
-                  <span class="product-state-value">
-                    {previewProductState.price > 0 ? previewProductState.price.toFixed(2) : 'Not detected'}
-                  </span>
-                </div>
-              {/if}
-            </div>
           {:else}
             <pre class="preview-content">{previewContent}</pre>
           {/if}

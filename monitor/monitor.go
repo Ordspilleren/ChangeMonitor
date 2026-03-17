@@ -21,6 +21,12 @@ type MonitorClient interface {
 	GetContent(url string, headers http.Header) (io.ReadCloser, error)
 }
 
+// DetectionFeature defines monitor-specific change detection behavior.
+type DetectionFeature interface {
+	Check(monitor *Monitor, content io.ReadCloser)
+	Preview(content io.ReadCloser) (PreviewResult, error)
+}
+
 // Storage persists and retrieves recorded content for each monitor.
 type Storage interface {
 	GetContent(id string) string
@@ -59,20 +65,17 @@ type ChromeClient struct {
 
 // Monitor describes a single URL to be watched for changes.
 type Monitor struct {
-	Name             string            `json:"name"`
-	URL              string            `json:"url"`
-	HTTPHeaders      http.Header       `json:"httpHeaders,omitempty"`
-	UseChrome        bool              `json:"useChrome"`
-	Interval         time.Duration     `json:"interval"`
-	Selector         Selector          `json:"selector"`
-	Filters          *Filters          `json:"filters,omitempty"`
-	IgnoreEmpty      bool              `json:"ignoreEmpty,omitempty"`
-	ProductDetection *ProductDetection `json:"productDetection,omitempty"`
+	Name        string
+	URL         string
+	HTTPHeaders http.Header
+	UseChrome   bool
+	Interval    time.Duration
+	Feature     DetectionFeature
 
-	notifier NotifierService
-	storage  Storage
-	client   MonitorClient
-	id       string
+	Notifier NotifierService
+	Storage  Storage
+	Client   MonitorClient
+	ID       string
 	started  bool
 	ticker   *time.Ticker
 	done     chan struct{}
@@ -179,28 +182,21 @@ func (ms *MonitorService) Shutdown() {
 	}
 }
 
-// PreviewRequest holds the parameters needed to fetch and process content for a
-// preview without persisting any state.
-type PreviewRequest struct {
-	URL              string            `json:"url"`
-	HTTPHeaders      http.Header       `json:"httpHeaders,omitempty"`
-	UseChrome        bool              `json:"useChrome"`
-	Selector         Selector          `json:"selector"`
-	ProductDetection *ProductDetection `json:"productDetection,omitempty"`
-}
-
 // PreviewResult holds the outcome of a preview request. Exactly one of Content
 // or ProductState will be populated depending on whether product detection is
 // enabled.
 type PreviewResult struct {
-	Content      string        `json:"content,omitempty"`
-	ProductState *ProductState `json:"productState,omitempty"`
+	Content string `json:"content,omitempty"`
 }
 
-// Preview fetches and processes content for req without recording anything.
-func (ms *MonitorService) Preview(req PreviewRequest) (PreviewResult, error) {
+// Preview fetches and processes content for m without recording anything.
+func (ms *MonitorService) Preview(m Monitor) (PreviewResult, error) {
+	if m.Feature == nil {
+		return PreviewResult{}, fmt.Errorf("preview: no detection feature configured")
+	}
+
 	var client MonitorClient
-	if req.UseChrome {
+	if m.UseChrome {
 		if ms.chromeClient == nil {
 			return PreviewResult{}, fmt.Errorf("chrome client not initialised")
 		}
@@ -209,50 +205,13 @@ func (ms *MonitorService) Preview(req PreviewRequest) (PreviewResult, error) {
 		client = ms.httpClient
 	}
 
-	content, err := client.GetContent(req.URL, req.HTTPHeaders)
+	content, err := client.GetContent(m.URL, m.HTTPHeaders)
 	if err != nil {
 		return PreviewResult{}, err
 	}
 	defer content.Close()
 
-	if req.ProductDetection != nil && (req.ProductDetection.TrackStock || req.ProductDetection.TrackPrice) {
-		body, err := io.ReadAll(content)
-		if err != nil {
-			return PreviewResult{}, fmt.Errorf("preview: read body: %w", err)
-		}
-		ps, err := extractProductData(body)
-		if err != nil {
-			return PreviewResult{}, err
-		}
-		return PreviewResult{ProductState: ps}, nil
-	}
-
-	text, err := processContent(content, req.Selector)
-	if err != nil {
-		return PreviewResult{}, err
-	}
-	return PreviewResult{Content: text}, nil
-}
-
-// NewMonitor is a convenience constructor for a basic monitor.
-func NewMonitor(name, url string, intervalMinutes int64) *Monitor {
-	return &Monitor{
-		Name:     name,
-		URL:      url,
-		Interval: time.Duration(intervalMinutes),
-	}
-}
-
-// AddCSSSelectors sets the monitor to extract content via the given CSS selectors.
-func (m *Monitor) AddCSSSelectors(selectors ...string) {
-	m.Selector.Type = "css"
-	m.Selector.Paths = selectors
-}
-
-// AddJSONSelectors sets the monitor to extract content via the given gjson paths.
-func (m *Monitor) AddJSONSelectors(selectors ...string) {
-	m.Selector.Type = "json"
-	m.Selector.Paths = selectors
+	return m.Feature.Preview(content)
 }
 
 // IsRunning reports whether the monitor's polling loop is active.
@@ -266,21 +225,24 @@ func (m *Monitor) Stop() {
 }
 
 func (m *Monitor) init(ms *MonitorService) {
-	m.id = generateSHA1(m.Name)
+	m.ID = generateSHA1(m.Name)
 	m.done = make(chan struct{}, 1)
 	m.ticker = time.NewTicker(m.Interval * time.Minute)
-	m.storage = ms.storage
-	m.notifier = ms.notifier
+	m.Storage = ms.storage
+	m.Notifier = ms.notifier
 	if m.UseChrome {
-		m.client = ms.chromeClient
+		m.Client = ms.chromeClient
 	} else {
-		m.client = ms.httpClient
+		m.Client = ms.httpClient
 	}
 }
 
 func (m *Monitor) start(wg *sync.WaitGroup) error {
 	if m.started {
 		return errors.New("monitor is already started")
+	}
+	if m.Feature == nil {
+		return errors.New("no detection feature configured")
 	}
 	wg.Add(1)
 	m.started = true
@@ -311,20 +273,19 @@ func generateSHA1(input string) string {
 
 func (m *Monitor) check() {
 	log.Printf("monitor: checking %s", m.URL)
+	if m.Feature == nil {
+		log.Printf("monitor: no detection feature configured for %q", m.Name)
+		return
+	}
 
-	content, err := m.client.GetContent(m.URL, m.HTTPHeaders)
+	content, err := m.Client.GetContent(m.URL, m.HTTPHeaders)
 	if err != nil {
 		log.Printf("monitor: get content: %v", err)
 		return
 	}
 	defer content.Close()
 
-	if m.ProductDetection != nil && (m.ProductDetection.TrackStock || m.ProductDetection.TrackPrice) {
-		m.checkProduct(content)
-		return
-	}
-
-	m.checkGeneric(content, m.Selector)
+	m.Feature.Check(m, content)
 }
 
 // GetContent implements MonitorClient for HTTPClient.

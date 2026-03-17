@@ -1,4 +1,4 @@
-package monitor
+package generic
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Ordspilleren/ChangeMonitor/monitor"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/tidwall/gjson"
 )
@@ -25,38 +26,54 @@ type Filters struct {
 	NotContains []string `json:"notContains,omitempty"`
 }
 
-func (m *Monitor) checkGeneric(content io.ReadCloser, selector Selector) {
-	processed, err := processContent(content, selector)
+// GenericFeature performs text extraction and comparison for change detection.
+type GenericFeature struct {
+	Selector    Selector
+	Filters     *Filters
+	IgnoreEmpty bool
+}
+
+func (g *GenericFeature) Check(monitor *monitor.Monitor, content io.ReadCloser) {
+	processed, err := processContent(content, g.Selector)
 	if err != nil {
 		log.Printf("monitor: process content: %v", err)
 		return
 	}
 
-	if m.IgnoreEmpty && processed == "" {
+	if g.IgnoreEmpty && processed == "" {
 		log.Print("monitor: content is empty, ignoring")
 		return
 	}
 
-	if m.Filters != nil && !filterMatch(*m.Filters, processed) {
+	if g.Filters != nil && !filterMatch(*g.Filters, processed) {
 		log.Print("monitor: no filter matched, ignoring")
 		return
 	}
 
-	stored := m.storage.GetContent(m.id)
+	stored := monitor.Storage.GetContent(monitor.ID)
 	if stored == processed {
-		log.Printf("monitor: no change detected, next check in %s", m.Interval*time.Minute)
+		log.Printf("monitor: no change detected, next check in %s", monitor.Interval*time.Minute)
 		return
 	}
 
-	m.storage.WriteContent(m.id, processed)
-	log.Printf("monitor: %q has changed", m.Name)
-	if err := m.notifier.Notify(
+	monitor.Storage.WriteContent(monitor.ID, processed)
+	log.Printf("monitor: %q has changed", monitor.Name)
+	if err := monitor.Notifier.Notify(
 		context.Background(),
-		fmt.Sprintf("ChangeMonitor: %s has changed!", m.Name),
-		fmt.Sprintf("%s changed.\n\n---\n(changed) %.200s\n\n(into) %.200s\n---", m.URL, stored, processed),
+		fmt.Sprintf("ChangeMonitor: %s has changed!", monitor.Name),
+		fmt.Sprintf("%s changed.\n\n---\n(changed) %.200s\n\n(into) %.200s\n---", monitor.URL, stored, processed),
 	); err != nil {
 		log.Printf("monitor: notify: %v", err)
 	}
+}
+
+// Preview processes content with generic extraction settings without persistence.
+func (g *GenericFeature) Preview(content io.ReadCloser) (monitor.PreviewResult, error) {
+	text, err := processContent(content, g.Selector)
+	if err != nil {
+		return monitor.PreviewResult{}, err
+	}
+	return monitor.PreviewResult{Content: text}, nil
 }
 
 func processContent(content io.ReadCloser, selector Selector) (string, error) {

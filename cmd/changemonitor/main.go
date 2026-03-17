@@ -47,8 +47,13 @@ func main() {
 	notifiers := InitNotifiers()
 	notifierService := notifier.NewNotifierService(notifiers)
 	storageService := storage.InitStorage(StorageDirectory)
+	runtimeMonitors, err := config.RuntimeMonitors()
+	if err != nil {
+		log.Print(err)
+		return
+	}
 
-	monitorService = monitor.NewMonitorService(config.Monitors, storageService, notifierService)
+	monitorService = monitor.NewMonitorService(runtimeMonitors, storageService, notifierService)
 	if err := monitorService.SetupChrome(ChromePath, ChromeWs); err != nil {
 		log.Fatal(err)
 	}
