@@ -33,7 +33,14 @@ type GenericFeature struct {
 	IgnoreEmpty bool
 }
 
-func (g *GenericFeature) Check(monitor *monitor.Monitor, content io.ReadCloser) {
+func (g *GenericFeature) Check(m *monitor.Monitor) {
+	content, err := m.Client.GetContent(m.URL, m.HTTPHeaders)
+	if err != nil {
+		log.Printf("monitor: get content: %v", err)
+		return
+	}
+	defer content.Close()
+
 	processed, err := processContent(content, g.Selector)
 	if err != nil {
 		log.Printf("monitor: process content: %v", err)
@@ -50,25 +57,31 @@ func (g *GenericFeature) Check(monitor *monitor.Monitor, content io.ReadCloser) 
 		return
 	}
 
-	stored := monitor.Storage.GetContent(monitor.ID)
+	stored := m.Storage.GetContent(m.ID)
 	if stored == processed {
-		log.Printf("monitor: no change detected, next check in %s", monitor.Interval*time.Minute)
+		log.Printf("monitor: no change detected, next check in %s", m.Interval*time.Minute)
 		return
 	}
 
-	monitor.Storage.WriteContent(monitor.ID, processed)
-	log.Printf("monitor: %q has changed", monitor.Name)
-	if err := monitor.Notifier.Notify(
+	m.Storage.WriteContent(m.ID, processed)
+	log.Printf("monitor: %q has changed", m.Name)
+	if err := m.Notifier.Notify(
 		context.Background(),
-		fmt.Sprintf("ChangeMonitor: %s has changed!", monitor.Name),
-		fmt.Sprintf("%s changed.\n\n---\n(changed) %.200s\n\n(into) %.200s\n---", monitor.URL, stored, processed),
+		fmt.Sprintf("ChangeMonitor: %s has changed!", m.Name),
+		fmt.Sprintf("%s changed.\n\n---\n(changed) %.200s\n\n(into) %.200s\n---", m.URL, stored, processed),
 	); err != nil {
 		log.Printf("monitor: notify: %v", err)
 	}
 }
 
-// Preview processes content with generic extraction settings without persistence.
-func (g *GenericFeature) Preview(content io.ReadCloser) (monitor.PreviewResult, error) {
+// Preview fetches and processes content for the given monitor configuration.
+func (g *GenericFeature) Preview(m monitor.Monitor) (monitor.PreviewResult, error) {
+	content, err := m.Client.GetContent(m.URL, m.HTTPHeaders)
+	if err != nil {
+		return monitor.PreviewResult{}, fmt.Errorf("preview: get content: %w", err)
+	}
+	defer content.Close()
+
 	text, err := processContent(content, g.Selector)
 	if err != nil {
 		return monitor.PreviewResult{}, err

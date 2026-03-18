@@ -21,10 +21,17 @@ type MonitorClient interface {
 	GetContent(url string, headers http.Header) (io.ReadCloser, error)
 }
 
+// JSEvaluator is an optional extension of MonitorClient that supports
+// JavaScript evaluation within a navigated page context.
+type JSEvaluator interface {
+	EvalOnPage(url string, waitSelector string, timeout time.Duration, jsExpr string) (string, error)
+}
+
 // DetectionFeature defines monitor-specific change detection behavior.
+// Implementations are responsible for fetching content via m.Client.
 type DetectionFeature interface {
-	Check(monitor *Monitor, content io.ReadCloser)
-	Preview(content io.ReadCloser) (PreviewResult, error)
+	Check(m *Monitor)
+	Preview(m Monitor) (PreviewResult, error)
 }
 
 // Storage persists and retrieves recorded content for each monitor.
@@ -195,23 +202,16 @@ func (ms *MonitorService) Preview(m Monitor) (PreviewResult, error) {
 		return PreviewResult{}, fmt.Errorf("preview: no detection feature configured")
 	}
 
-	var client MonitorClient
 	if m.UseChrome {
 		if ms.chromeClient == nil {
 			return PreviewResult{}, fmt.Errorf("chrome client not initialised")
 		}
-		client = ms.chromeClient
+		m.Client = ms.chromeClient
 	} else {
-		client = ms.httpClient
+		m.Client = ms.httpClient
 	}
 
-	content, err := client.GetContent(m.URL, m.HTTPHeaders)
-	if err != nil {
-		return PreviewResult{}, err
-	}
-	defer content.Close()
-
-	return m.Feature.Preview(content)
+	return m.Feature.Preview(m)
 }
 
 // IsRunning reports whether the monitor's polling loop is active.
@@ -272,20 +272,12 @@ func generateSHA1(input string) string {
 }
 
 func (m *Monitor) check() {
-	log.Printf("monitor: checking %s", m.URL)
+	log.Printf("monitor: checking %s", m.Name)
 	if m.Feature == nil {
 		log.Printf("monitor: no detection feature configured for %q", m.Name)
 		return
 	}
-
-	content, err := m.Client.GetContent(m.URL, m.HTTPHeaders)
-	if err != nil {
-		log.Printf("monitor: get content: %v", err)
-		return
-	}
-	defer content.Close()
-
-	m.Feature.Check(m, content)
+	m.Feature.Check(m)
 }
 
 // GetContent implements MonitorClient for HTTPClient.
@@ -331,6 +323,48 @@ func (c *ChromeClient) GetContent(url string, headers http.Header) (io.ReadClose
 		return nil, fmt.Errorf("chromedp: %w", err)
 	}
 	return io.NopCloser(strings.NewReader(htmlContent)), nil
+}
+
+// EvalOnPage implements JSEvaluator for ChromeClient. It navigates to url,
+// polls for waitSelector to appear (up to timeout), then evaluates jsExpr and
+// returns the result string. A timeout waiting for the selector is treated as
+// non-fatal so that pages with no matching elements still evaluate normally.
+func (c *ChromeClient) EvalOnPage(url, waitSelector string, timeout time.Duration, jsExpr string) (string, error) {
+	ctx, cancel := chromedp.NewContext(c.allocCtx)
+	defer cancel()
+
+	ctx, cancelTimeout := context.WithTimeout(ctx, timeout+10*time.Second)
+	defer cancelTimeout()
+
+	tasks := chromedp.Tasks{chromedp.Navigate(url)}
+	if waitSelector != "" && timeout > 0 {
+		tasks = append(tasks, chromedp.ActionFunc(func(ctx context.Context) error {
+			deadline := time.Now().Add(timeout)
+			for time.Now().Before(deadline) {
+				var count int
+				if err := chromedp.Evaluate(
+					fmt.Sprintf(`document.querySelectorAll(%q).length`, waitSelector),
+					&count,
+				).Do(ctx); err == nil && count > 0 {
+					return nil
+				}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(500 * time.Millisecond):
+				}
+			}
+			return nil // selector timeout is non-fatal; proceed with evaluation
+		}))
+	}
+
+	var result string
+	tasks = append(tasks, chromedp.Evaluate(jsExpr, &result))
+
+	if err := chromedp.Run(ctx, tasks...); err != nil {
+		return "", fmt.Errorf("chromedp eval: %w", err)
+	}
+	return result, nil
 }
 
 func (c *ChromeClient) close() {

@@ -160,6 +160,9 @@
                     {#if monitor.product}
                       <span class="tag tag-product">Product detection</span>
                     {/if}
+                    {#if monitor.facebook}
+                      <span class="tag tag-site">Facebook Marketplace</span>
+                    {/if}
                   </div>
                 </div>
               </div>

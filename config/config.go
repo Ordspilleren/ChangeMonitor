@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Ordspilleren/ChangeMonitor/monitor"
+	"github.com/Ordspilleren/ChangeMonitor/monitor/facebook"
 	"github.com/Ordspilleren/ChangeMonitor/monitor/generic"
 	"github.com/Ordspilleren/ChangeMonitor/monitor/product"
 )
@@ -27,8 +28,9 @@ type MonitorConfig struct {
 	UseChrome   bool        `json:"useChrome"`
 	Interval    int64       `json:"interval"`
 
-	Generic *GenericFeatureConfig `json:"generic,omitempty"`
-	Product *ProductFeatureConfig `json:"product,omitempty"`
+	Generic  *GenericFeatureConfig  `json:"generic,omitempty"`
+	Product  *ProductFeatureConfig  `json:"product,omitempty"`
+	Facebook *FacebookFeatureConfig `json:"facebook,omitempty"`
 }
 
 type SelectorConfig struct {
@@ -52,6 +54,11 @@ type ProductFeatureConfig struct {
 	TrackPrice bool     `json:"trackPrice,omitempty"`
 	MinPrice   *float64 `json:"minPrice,omitempty"`
 	MaxPrice   *float64 `json:"maxPrice,omitempty"`
+}
+
+type FacebookFeatureConfig struct {
+	Keywords []string `json:"keywords"`
+	MaxPrice float64  `json:"maxPrice,omitempty"`
 }
 
 // NotifiersConfig holds the configuration for each supported notifier type.
@@ -106,8 +113,27 @@ func (mc *MonitorConfig) ToRuntime() (monitor.Monitor, error) {
 		Interval:    time.Duration(mc.Interval),
 	}
 
-	if mc.Generic != nil && mc.Product != nil {
+	featureCount := 0
+	if mc.Generic != nil {
+		featureCount++
+	}
+	if mc.Product != nil {
+		featureCount++
+	}
+	if mc.Facebook != nil {
+		featureCount++
+	}
+	if featureCount > 1 {
 		return monitor.Monitor{}, fmt.Errorf("only one detection feature can be configured")
+	}
+
+	if mc.Facebook != nil {
+		m.UseChrome = true // Facebook Marketplace always requires Chrome
+		m.Feature = &facebook.FacebookFeature{
+			Keywords: mc.Facebook.Keywords,
+			MaxPrice: mc.Facebook.MaxPrice,
+		}
+		return m, nil
 	}
 
 	if mc.Product != nil {

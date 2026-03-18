@@ -21,6 +21,11 @@ export interface GenericFeature {
   ignoreEmpty?: boolean
 }
 
+export interface FacebookFeature {
+  keywords?: string[]
+  maxPrice?: number
+}
+
 export interface Monitor {
   name: string
   url: string
@@ -29,6 +34,7 @@ export interface Monitor {
   interval: number
   generic?: GenericFeature
   product?: ProductFeature
+  facebook?: FacebookFeature
 }
 
 export interface PushoverConfig {

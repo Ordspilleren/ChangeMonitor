@@ -18,11 +18,13 @@
   let filterContains = $state('')
   let filterNotContains = $state('')
   let ignoreEmpty = $state(false)
-  let featureType = $state<'generic' | 'product'>('generic')
+  let featureType = $state<'generic' | 'product' | 'facebook'>('generic')
   let trackStock = $state(false)
   let trackPrice = $state(false)
   let minPrice = $state<number | undefined>(undefined)
   let maxPrice = $state<number | undefined>(undefined)
+  let fbKeywords = $state('')
+  let fbMaxPrice = $state<number | undefined>(undefined)
   let showAdvanced = $state(false)
   let httpHeaderEntries = $state<{ key: string; value: string }[]>([])
 
@@ -36,11 +38,13 @@
     filterContains = (monitor.generic?.filters?.contains ?? []).join('\n')
     filterNotContains = (monitor.generic?.filters?.notContains ?? []).join('\n')
     ignoreEmpty = monitor.generic?.ignoreEmpty ?? false
-    featureType = monitor.product !== undefined ? 'product' : 'generic'
+    featureType = monitor.product !== undefined ? 'product' : monitor.facebook !== undefined ? 'facebook' : 'generic'
     trackStock = monitor.product?.trackStock ?? false
     trackPrice = monitor.product?.trackPrice ?? false
     minPrice = monitor.product?.minPrice
     maxPrice = monitor.product?.maxPrice
+    fbKeywords = (monitor.facebook?.keywords ?? []).join('\n')
+    fbMaxPrice = monitor.facebook?.maxPrice
     httpHeaderEntries = Object.entries(monitor.httpHeaders ?? {}).flatMap(([k, vals]) =>
       vals.map((v) => ({ key: k, value: v }))
     )
@@ -75,12 +79,18 @@
     }
     let generic = undefined
     let product = undefined
+    let facebook = undefined
     if (featureType === 'product') {
       product = {
         trackStock,
         trackPrice,
         minPrice: trackPrice && minPrice !== undefined ? minPrice : undefined,
         maxPrice: trackPrice && maxPrice !== undefined ? maxPrice : undefined,
+      }
+    } else if (featureType === 'facebook') {
+      facebook = {
+        keywords: fbKeywords.split('\n').map((s) => s.trim()).filter(Boolean),
+        maxPrice: fbMaxPrice,
       }
     } else {
       generic = {
@@ -93,10 +103,11 @@
       name: name.trim(),
       url: url.trim(),
       interval,
-      useChrome,
+      useChrome: featureType === 'facebook' ? true : useChrome,
       httpHeaders: Object.keys(httpHeaders).length ? httpHeaders : undefined,
       generic,
       product,
+      facebook,
     })
   }
 
@@ -115,12 +126,18 @@
       }
       let generic = undefined
       let product = undefined
+      let facebook = undefined
       if (featureType === 'product') {
         product = {
           trackStock,
           trackPrice,
           minPrice,
           maxPrice,
+        }
+      } else if (featureType === 'facebook') {
+        facebook = {
+          keywords: fbKeywords.split('\n').map((s) => s.trim()).filter(Boolean),
+          maxPrice: fbMaxPrice,
         }
       } else {
         const contains = filterContains.split('\n').map((s) => s.trim()).filter(Boolean)
@@ -135,9 +152,10 @@
         name: name.trim() || 'Preview',
         url: url.trim(),
         interval: interval > 0 ? interval : 1,
-        useChrome,
+        useChrome: featureType === 'facebook' ? true : useChrome,
         generic,
         product,
+        facebook,
       }
       if (Object.keys(httpHeaders).length) body.httpHeaders = httpHeaders
       const res = await fetch('/api/preview', {
@@ -234,13 +252,42 @@
         <select id="m-feature-type" bind:value={featureType}>
           <option value="generic">Generic (page content)</option>
           <option value="product">Product (stock &amp; price)</option>
+          <option value="facebook">Facebook Marketplace</option>
         </select>
         <span class="hint">
           {featureType === 'product'
             ? 'Automatically extract stock status and price from single-product pages.'
+            : featureType === 'facebook'
+            ? 'Monitor Facebook Marketplace for new listings matching keywords. Requires Chrome.'
             : 'Monitor page content for changes using selectors and filters.'}
         </span>
       </div>
+
+      {#if featureType === 'facebook'}
+        <div class="form-group">
+          <label for="m-fb-keywords">Keywords</label>
+          <textarea
+            id="m-fb-keywords"
+            bind:value={fbKeywords}
+            rows="3"
+            placeholder="One keyword or phrase per line e.g.&#10;macbook pro&#10;iphone 14"
+          ></textarea>
+          <span class="hint">Only notify for listings whose title matches at least one keyword.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="m-fb-max-price">Max price (optional)</label>
+          <input
+            id="m-fb-max-price"
+            type="number"
+            bind:value={fbMaxPrice}
+            min="0"
+            step="1"
+            placeholder="No maximum"
+          />
+          <span class="hint">Only notify for listings at or below this price. Leave blank to notify for all listings.</span>
+        </div>
+      {/if}
 
       {#if featureType === 'generic'}
         <div class="form-group">

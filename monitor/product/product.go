@@ -36,8 +36,14 @@ type ProductFeature struct {
 	Detection ProductDetection
 }
 
-func (p *ProductFeature) Check(monitor *monitor.Monitor, content io.ReadCloser) {
+func (p *ProductFeature) Check(m *monitor.Monitor) {
+	content, err := m.Client.GetContent(m.URL, m.HTTPHeaders)
+	if err != nil {
+		log.Printf("monitor: product detection: get content: %v", err)
+		return
+	}
 	body, err := io.ReadAll(content)
+	content.Close()
 	if err != nil {
 		log.Printf("monitor: product detection: read body: %v", err)
 		return
@@ -49,11 +55,11 @@ func (p *ProductFeature) Check(monitor *monitor.Monitor, content io.ReadCloser) 
 		return
 	}
 	if current == nil {
-		log.Printf("monitor: product detection: no product data found on page %s", monitor.URL)
+		log.Printf("monitor: product detection: no product data found on page %s", m.URL)
 		return
 	}
 
-	storedJSON := monitor.Storage.GetContent(monitor.ID)
+	storedJSON := m.Storage.GetContent(m.ID)
 	var stored *ProductState
 	if storedJSON != "" {
 		stored = &ProductState{}
@@ -63,10 +69,10 @@ func (p *ProductFeature) Check(monitor *monitor.Monitor, content io.ReadCloser) 
 		}
 	}
 	stateJSON, _ := json.Marshal(current)
-	monitor.Storage.WriteContent(monitor.ID, string(stateJSON))
+	m.Storage.WriteContent(m.ID, string(stateJSON))
 
 	if stored == nil {
-		log.Printf("monitor: initial product state recorded for %q (inStock=%v price=%.2f)", monitor.Name, current.InStock, current.Price)
+		log.Printf("monitor: initial product state recorded for %q (inStock=%v price=%.2f)", m.Name, current.InStock, current.Price)
 		return
 	}
 
@@ -90,24 +96,29 @@ func (p *ProductFeature) Check(monitor *monitor.Monitor, content io.ReadCloser) 
 	}
 
 	if len(changes) == 0 {
-		log.Printf("monitor: no relevant product change for %q, next check in %s", monitor.Name, monitor.Interval*time.Minute)
+		log.Printf("monitor: no relevant product change for %q, next check in %s", m.Name, m.Interval*time.Minute)
 		return
 	}
 
 	changeStr := strings.Join(changes, "; ")
-	log.Printf("monitor: %q product change: %s", monitor.Name, changeStr)
-	if err := monitor.Notifier.Notify(
+	log.Printf("monitor: %q product change: %s", m.Name, changeStr)
+	if err := m.Notifier.Notify(
 		context.Background(),
-		fmt.Sprintf("ChangeMonitor: %s – %s", monitor.Name, changeStr),
-		fmt.Sprintf("%s\n\n%s\n\nURL: %s", monitor.Name, changeStr, monitor.URL),
+		fmt.Sprintf("ChangeMonitor: %s – %s", m.Name, changeStr),
+		fmt.Sprintf("%s\n\n%s\n\nURL: %s", m.Name, changeStr, m.URL),
 	); err != nil {
 		log.Printf("monitor: notify: %v", err)
 	}
 }
 
-// Preview extracts the current product state without persistence.
-func (p *ProductFeature) Preview(content io.ReadCloser) (monitor.PreviewResult, error) {
+// Preview fetches and extracts the current product state without persistence.
+func (p *ProductFeature) Preview(m monitor.Monitor) (monitor.PreviewResult, error) {
+	content, err := m.Client.GetContent(m.URL, m.HTTPHeaders)
+	if err != nil {
+		return monitor.PreviewResult{}, fmt.Errorf("preview: get content: %w", err)
+	}
 	body, err := io.ReadAll(content)
+	content.Close()
 	if err != nil {
 		return monitor.PreviewResult{}, fmt.Errorf("preview: read body: %w", err)
 	}
