@@ -103,8 +103,8 @@ func (p *ProductFeature) Check(m *monitor.Monitor) {
 	log.Printf("monitor: %q product change: %s", m.Name, changeStr)
 	if err := m.Notifier.Notify(
 		context.Background(),
-		fmt.Sprintf("ChangeMonitor: %s – %s", m.Name, changeStr),
-		fmt.Sprintf("%s\n\n%s\n\nURL: %s", m.Name, changeStr, m.URL),
+		fmt.Sprintf("ChangeMonitor: %s has changed!", m.Name),
+		fmt.Sprintf("%s changed.\n\n---\n(change) %.200s\n\n(url) %s\n---", m.Name, changeStr, m.URL),
 	); err != nil {
 		log.Printf("monitor: notify: %v", err)
 	}

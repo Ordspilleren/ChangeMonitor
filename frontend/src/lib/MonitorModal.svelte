@@ -23,6 +23,10 @@
   let trackPrice = $state(false)
   let minPrice = $state<number | undefined>(undefined)
   let maxPrice = $state<number | undefined>(undefined)
+  let mktSelector = $state('')
+  let mktLinkSelector = $state('')
+  let mktTitleSelector = $state('')
+  let mktPriceSelector = $state('')
   let mktKeywords = $state('')
   let mktMaxPrice = $state<number | undefined>(undefined)
   let showAdvanced = $state(false)
@@ -43,6 +47,10 @@
     trackPrice = monitor.product?.trackPrice ?? false
     minPrice = monitor.product?.minPrice
     maxPrice = monitor.product?.maxPrice
+    mktSelector = monitor.marketplace?.selector ?? ''
+    mktLinkSelector = monitor.marketplace?.linkSelector ?? ''
+    mktTitleSelector = monitor.marketplace?.titleSelector ?? ''
+    mktPriceSelector = monitor.marketplace?.priceSelector ?? ''
     mktKeywords = (monitor.marketplace?.keywords ?? []).join('\n')
     mktMaxPrice = monitor.marketplace?.maxPrice
     httpHeaderEntries = Object.entries(monitor.httpHeaders ?? {}).flatMap(([k, vals]) =>
@@ -62,8 +70,16 @@
   let previewError: string | null = $state(null)
   let previewing = $state(false)
 
-  let valid = $derived(name.trim() !== '' && url.trim() !== '' && interval > 0 && (featureType !== 'product' || trackStock || trackPrice))
-  let canPreview = $derived(url.trim() !== '' && (featureType !== 'product' || trackStock || trackPrice))
+  let valid = $derived(
+    name.trim() !== '' && url.trim() !== '' && interval > 0 &&
+    (featureType !== 'product' || trackStock || trackPrice) &&
+    (featureType !== 'marketplace' || mktSelector.trim() !== '')
+  )
+  let canPreview = $derived(
+    url.trim() !== '' &&
+    (featureType !== 'product' || trackStock || trackPrice) &&
+    (featureType !== 'marketplace' || mktSelector.trim() !== '')
+  )
 
   function save(): void {
     if (!valid) return
@@ -89,6 +105,10 @@
       }
     } else if (featureType === 'marketplace') {
       marketplace = {
+        selector: mktSelector.trim(),
+        linkSelector: mktLinkSelector.trim() || undefined,
+        titleSelector: mktTitleSelector.trim() || undefined,
+        priceSelector: mktPriceSelector.trim() || undefined,
         keywords: mktKeywords.split('\n').map((s) => s.trim()).filter(Boolean),
         maxPrice: mktMaxPrice,
       }
@@ -136,6 +156,10 @@
         }
       } else if (featureType === 'marketplace') {
         marketplace = {
+          selector: mktSelector.trim(),
+          linkSelector: mktLinkSelector.trim() || undefined,
+          titleSelector: mktTitleSelector.trim() || undefined,
+          priceSelector: mktPriceSelector.trim() || undefined,
           keywords: mktKeywords.split('\n').map((s) => s.trim()).filter(Boolean),
           maxPrice: mktMaxPrice,
         }
@@ -265,7 +289,51 @@
 
       {#if featureType === 'marketplace'}
         <div class="form-group">
-          <label for="m-mkt-keywords">Keywords</label>
+          <label for="m-mkt-selector">Listing selector <span aria-hidden="true">*</span></label>
+          <input
+            id="m-mkt-selector"
+            type="text"
+            bind:value={mktSelector}
+            placeholder="e.g. article.listing-card"
+          />
+          <span class="hint">CSS selector that matches one element per listing on the page.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="m-mkt-link-selector">Link selector (optional)</label>
+          <input
+            id="m-mkt-link-selector"
+            type="text"
+            bind:value={mktLinkSelector}
+            placeholder="e.g. a.listing-link"
+          />
+          <span class="hint">CSS selector for the &lt;a&gt; element inside each listing. Leave blank to use the first link found.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="m-mkt-title-selector">Title selector (optional)</label>
+          <input
+            id="m-mkt-title-selector"
+            type="text"
+            bind:value={mktTitleSelector}
+            placeholder="e.g. h2.title"
+          />
+          <span class="hint">CSS selector for the title element. Leave blank to use the first heading or full text.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="m-mkt-price-selector">Price selector (optional)</label>
+          <input
+            id="m-mkt-price-selector"
+            type="text"
+            bind:value={mktPriceSelector}
+            placeholder="e.g. span.price"
+          />
+          <span class="hint">CSS selector for the price element. Leave blank to auto-detect a price-like value.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="m-mkt-keywords">Keywords (optional)</label>
           <textarea
             id="m-mkt-keywords"
             bind:value={mktKeywords}

@@ -57,8 +57,13 @@ type ProductFeatureConfig struct {
 }
 
 type MarketplaceFeatureConfig struct {
-	Keywords []string `json:"keywords"`
-	MaxPrice float64  `json:"maxPrice,omitempty"`
+	// Selector is a CSS selector that matches one element per listing on the page.
+	Selector      string   `json:"selector"`
+	LinkSelector  string   `json:"linkSelector,omitempty"`
+	TitleSelector string   `json:"titleSelector,omitempty"`
+	PriceSelector string   `json:"priceSelector,omitempty"`
+	Keywords      []string `json:"keywords,omitempty"`
+	MaxPrice      float64  `json:"maxPrice,omitempty"`
 }
 
 // NotifiersConfig holds the configuration for each supported notifier type.
@@ -128,12 +133,13 @@ func (mc *MonitorConfig) ToRuntime() (monitor.Monitor, error) {
 	}
 
 	if mc.Marketplace != nil {
-		if marketplace.URLRequiresChrome(mc.URL) {
-			m.UseChrome = true
-		}
 		m.Feature = &marketplace.MarketplaceFeature{
-			Keywords: mc.Marketplace.Keywords,
-			MaxPrice: mc.Marketplace.MaxPrice,
+			Selector:      mc.Marketplace.Selector,
+			LinkSelector:  mc.Marketplace.LinkSelector,
+			TitleSelector: mc.Marketplace.TitleSelector,
+			PriceSelector: mc.Marketplace.PriceSelector,
+			Keywords:      mc.Marketplace.Keywords,
+			MaxPrice:      mc.Marketplace.MaxPrice,
 		}
 		return m, nil
 	}

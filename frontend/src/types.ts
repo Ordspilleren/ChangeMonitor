@@ -22,6 +22,10 @@ export interface GenericFeature {
 }
 
 export interface MarketplaceFeature {
+  selector: string
+  linkSelector?: string
+  titleSelector?: string
+  priceSelector?: string
   keywords?: string[]
   maxPrice?: number
 }
