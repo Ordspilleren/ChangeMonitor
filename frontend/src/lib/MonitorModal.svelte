@@ -18,13 +18,13 @@
   let filterContains = $state('')
   let filterNotContains = $state('')
   let ignoreEmpty = $state(false)
-  let featureType = $state<'generic' | 'product' | 'facebook'>('generic')
+  let featureType = $state<'generic' | 'product' | 'marketplace'>('generic')
   let trackStock = $state(false)
   let trackPrice = $state(false)
   let minPrice = $state<number | undefined>(undefined)
   let maxPrice = $state<number | undefined>(undefined)
-  let fbKeywords = $state('')
-  let fbMaxPrice = $state<number | undefined>(undefined)
+  let mktKeywords = $state('')
+  let mktMaxPrice = $state<number | undefined>(undefined)
   let showAdvanced = $state(false)
   let httpHeaderEntries = $state<{ key: string; value: string }[]>([])
 
@@ -38,13 +38,13 @@
     filterContains = (monitor.generic?.filters?.contains ?? []).join('\n')
     filterNotContains = (monitor.generic?.filters?.notContains ?? []).join('\n')
     ignoreEmpty = monitor.generic?.ignoreEmpty ?? false
-    featureType = monitor.product !== undefined ? 'product' : monitor.facebook !== undefined ? 'facebook' : 'generic'
+    featureType = monitor.product !== undefined ? 'product' : monitor.marketplace !== undefined ? 'marketplace' : 'generic'
     trackStock = monitor.product?.trackStock ?? false
     trackPrice = monitor.product?.trackPrice ?? false
     minPrice = monitor.product?.minPrice
     maxPrice = monitor.product?.maxPrice
-    fbKeywords = (monitor.facebook?.keywords ?? []).join('\n')
-    fbMaxPrice = monitor.facebook?.maxPrice
+    mktKeywords = (monitor.marketplace?.keywords ?? []).join('\n')
+    mktMaxPrice = monitor.marketplace?.maxPrice
     httpHeaderEntries = Object.entries(monitor.httpHeaders ?? {}).flatMap(([k, vals]) =>
       vals.map((v) => ({ key: k, value: v }))
     )
@@ -79,7 +79,7 @@
     }
     let generic = undefined
     let product = undefined
-    let facebook = undefined
+    let marketplace = undefined
     if (featureType === 'product') {
       product = {
         trackStock,
@@ -87,10 +87,10 @@
         minPrice: trackPrice && minPrice !== undefined ? minPrice : undefined,
         maxPrice: trackPrice && maxPrice !== undefined ? maxPrice : undefined,
       }
-    } else if (featureType === 'facebook') {
-      facebook = {
-        keywords: fbKeywords.split('\n').map((s) => s.trim()).filter(Boolean),
-        maxPrice: fbMaxPrice,
+    } else if (featureType === 'marketplace') {
+      marketplace = {
+        keywords: mktKeywords.split('\n').map((s) => s.trim()).filter(Boolean),
+        maxPrice: mktMaxPrice,
       }
     } else {
       generic = {
@@ -103,11 +103,11 @@
       name: name.trim(),
       url: url.trim(),
       interval,
-      useChrome: featureType === 'facebook' ? true : useChrome,
+      useChrome,
       httpHeaders: Object.keys(httpHeaders).length ? httpHeaders : undefined,
       generic,
       product,
-      facebook,
+      marketplace,
     })
   }
 
@@ -126,7 +126,7 @@
       }
       let generic = undefined
       let product = undefined
-      let facebook = undefined
+      let marketplace = undefined
       if (featureType === 'product') {
         product = {
           trackStock,
@@ -134,10 +134,10 @@
           minPrice,
           maxPrice,
         }
-      } else if (featureType === 'facebook') {
-        facebook = {
-          keywords: fbKeywords.split('\n').map((s) => s.trim()).filter(Boolean),
-          maxPrice: fbMaxPrice,
+      } else if (featureType === 'marketplace') {
+        marketplace = {
+          keywords: mktKeywords.split('\n').map((s) => s.trim()).filter(Boolean),
+          maxPrice: mktMaxPrice,
         }
       } else {
         const contains = filterContains.split('\n').map((s) => s.trim()).filter(Boolean)
@@ -152,10 +152,10 @@
         name: name.trim() || 'Preview',
         url: url.trim(),
         interval: interval > 0 ? interval : 1,
-        useChrome: featureType === 'facebook' ? true : useChrome,
+        useChrome,
         generic,
         product,
-        facebook,
+        marketplace,
       }
       if (Object.keys(httpHeaders).length) body.httpHeaders = httpHeaders
       const res = await fetch('/api/preview', {
@@ -252,23 +252,23 @@
         <select id="m-feature-type" bind:value={featureType}>
           <option value="generic">Generic (page content)</option>
           <option value="product">Product (stock &amp; price)</option>
-          <option value="facebook">Facebook Marketplace</option>
+          <option value="marketplace">Marketplace</option>
         </select>
         <span class="hint">
           {featureType === 'product'
             ? 'Automatically extract stock status and price from single-product pages.'
-            : featureType === 'facebook'
-            ? 'Monitor Facebook Marketplace for new listings matching keywords. Requires Chrome.'
+            : featureType === 'marketplace'
+            ? 'Monitor an online marketplace for new listings matching keywords.'
             : 'Monitor page content for changes using selectors and filters.'}
         </span>
       </div>
 
-      {#if featureType === 'facebook'}
+      {#if featureType === 'marketplace'}
         <div class="form-group">
-          <label for="m-fb-keywords">Keywords</label>
+          <label for="m-mkt-keywords">Keywords</label>
           <textarea
-            id="m-fb-keywords"
-            bind:value={fbKeywords}
+            id="m-mkt-keywords"
+            bind:value={mktKeywords}
             rows="3"
             placeholder="One keyword or phrase per line e.g.&#10;macbook pro&#10;iphone 14"
           ></textarea>
@@ -276,11 +276,11 @@
         </div>
 
         <div class="form-group">
-          <label for="m-fb-max-price">Max price (optional)</label>
+          <label for="m-mkt-max-price">Max price (optional)</label>
           <input
-            id="m-fb-max-price"
+            id="m-mkt-max-price"
             type="number"
-            bind:value={fbMaxPrice}
+            bind:value={mktMaxPrice}
             min="0"
             step="1"
             placeholder="No maximum"

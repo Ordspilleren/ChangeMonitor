@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"strconv"
 	"strings"
 	"time"
 
@@ -186,7 +185,7 @@ func extractProductData(body []byte) (*ProductState, error) {
 		content := s.AttrOr("content", "")
 		switch prop {
 		case "product:price:amount", "og:price:amount":
-			if p, ok := parsePrice(content); ok {
+			if p, ok := monitor.ParsePrice(content); ok {
 				price = p
 				hasPrice = true
 			}
@@ -243,7 +242,7 @@ func productStateFromOffer(offer map[string]any) *ProductState {
 	case float64:
 		state.Price = v
 	case string:
-		if p, ok := parsePrice(v); ok {
+		if p, ok := monitor.ParsePrice(v); ok {
 			state.Price = p
 		}
 	}
@@ -266,29 +265,4 @@ func isInStockString(s string) bool {
 		}
 	}
 	return false
-}
-
-func parsePrice(s string) (float64, bool) {
-	s = strings.TrimSpace(s)
-
-	lastComma := strings.LastIndex(s, ",")
-	lastDot := strings.LastIndex(s, ".")
-
-	switch {
-	case lastComma > lastDot:
-		s = strings.ReplaceAll(s, ".", "")
-		s = strings.ReplaceAll(s, ",", ".")
-	default:
-		s = strings.ReplaceAll(s, ",", "")
-	}
-
-	s = strings.Map(func(r rune) rune {
-		if r >= '0' && r <= '9' || r == '.' {
-			return r
-		}
-		return -1
-	}, s)
-
-	p, err := strconv.ParseFloat(s, 64)
-	return p, err == nil
 }

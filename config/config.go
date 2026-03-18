@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/Ordspilleren/ChangeMonitor/monitor"
-	"github.com/Ordspilleren/ChangeMonitor/monitor/facebook"
 	"github.com/Ordspilleren/ChangeMonitor/monitor/generic"
+	"github.com/Ordspilleren/ChangeMonitor/monitor/marketplace"
 	"github.com/Ordspilleren/ChangeMonitor/monitor/product"
 )
 
@@ -28,9 +28,9 @@ type MonitorConfig struct {
 	UseChrome   bool        `json:"useChrome"`
 	Interval    int64       `json:"interval"`
 
-	Generic  *GenericFeatureConfig  `json:"generic,omitempty"`
-	Product  *ProductFeatureConfig  `json:"product,omitempty"`
-	Facebook *FacebookFeatureConfig `json:"facebook,omitempty"`
+	Generic     *GenericFeatureConfig     `json:"generic,omitempty"`
+	Product     *ProductFeatureConfig     `json:"product,omitempty"`
+	Marketplace *MarketplaceFeatureConfig `json:"marketplace,omitempty"`
 }
 
 type SelectorConfig struct {
@@ -56,7 +56,7 @@ type ProductFeatureConfig struct {
 	MaxPrice   *float64 `json:"maxPrice,omitempty"`
 }
 
-type FacebookFeatureConfig struct {
+type MarketplaceFeatureConfig struct {
 	Keywords []string `json:"keywords"`
 	MaxPrice float64  `json:"maxPrice,omitempty"`
 }
@@ -120,18 +120,20 @@ func (mc *MonitorConfig) ToRuntime() (monitor.Monitor, error) {
 	if mc.Product != nil {
 		featureCount++
 	}
-	if mc.Facebook != nil {
+	if mc.Marketplace != nil {
 		featureCount++
 	}
 	if featureCount > 1 {
 		return monitor.Monitor{}, fmt.Errorf("only one detection feature can be configured")
 	}
 
-	if mc.Facebook != nil {
-		m.UseChrome = true // Facebook Marketplace always requires Chrome
-		m.Feature = &facebook.FacebookFeature{
-			Keywords: mc.Facebook.Keywords,
-			MaxPrice: mc.Facebook.MaxPrice,
+	if mc.Marketplace != nil {
+		if marketplace.URLRequiresChrome(mc.URL) {
+			m.UseChrome = true
+		}
+		m.Feature = &marketplace.MarketplaceFeature{
+			Keywords: mc.Marketplace.Keywords,
+			MaxPrice: mc.Marketplace.MaxPrice,
 		}
 		return m, nil
 	}

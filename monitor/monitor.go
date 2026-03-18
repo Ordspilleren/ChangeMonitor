@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -382,4 +383,32 @@ func newLocalChromeClient(chromePath string) (*ChromeClient, error) {
 func newRemoteChromeClient(wsURL string) (*ChromeClient, error) {
 	allocCtx, cancelAlloc := chromedp.NewRemoteAllocator(context.Background(), wsURL)
 	return &ChromeClient{allocCtx: allocCtx, cancelAlloc: cancelAlloc}, nil
+}
+
+// ParsePrice parses a price string that may contain currency symbols, thousands
+// separators, and either comma or dot as the decimal separator.
+// Returns the numeric value and true on success.
+func ParsePrice(s string) (float64, bool) {
+	s = strings.TrimSpace(s)
+
+	lastComma := strings.LastIndex(s, ",")
+	lastDot := strings.LastIndex(s, ".")
+
+	switch {
+	case lastComma > lastDot:
+		s = strings.ReplaceAll(s, ".", "")
+		s = strings.ReplaceAll(s, ",", ".")
+	default:
+		s = strings.ReplaceAll(s, ",", "")
+	}
+
+	s = strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' || r == '.' {
+			return r
+		}
+		return -1
+	}, s)
+
+	p, err := strconv.ParseFloat(s, 64)
+	return p, err == nil
 }

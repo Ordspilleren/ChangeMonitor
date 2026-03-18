@@ -21,7 +21,7 @@ export interface GenericFeature {
   ignoreEmpty?: boolean
 }
 
-export interface FacebookFeature {
+export interface MarketplaceFeature {
   keywords?: string[]
   maxPrice?: number
 }
@@ -34,7 +34,7 @@ export interface Monitor {
   interval: number
   generic?: GenericFeature
   product?: ProductFeature
-  facebook?: FacebookFeature
+  marketplace?: MarketplaceFeature
 }
 
 export interface PushoverConfig {
