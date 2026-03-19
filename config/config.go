@@ -15,8 +15,21 @@ import (
 )
 
 type Config struct {
-	Monitors  []MonitorConfig `json:"monitors"`
-	Notifiers NotifiersConfig `json:"notifiers"`
+	Monitors  []MonitorConfig   `json:"monitors"`
+	Notifiers NotifiersConfig   `json:"notifiers"`
+	Templates []MonitorTemplate `json:"templates,omitempty"`
+}
+
+// MonitorTemplate is a reusable monitor configuration without a name or URL.
+type MonitorTemplate struct {
+	Name        string      `json:"name"`
+	HTTPHeaders http.Header `json:"httpHeaders,omitempty"`
+	UseChrome   bool        `json:"useChrome"`
+	Interval    int64       `json:"interval"`
+
+	Generic     *GenericFeatureConfig     `json:"generic,omitempty"`
+	Product     *ProductFeatureConfig     `json:"product,omitempty"`
+	Marketplace *MarketplaceFeatureConfig `json:"marketplace,omitempty"`
 }
 
 // MonitorConfig describes the JSON configuration for a monitor.

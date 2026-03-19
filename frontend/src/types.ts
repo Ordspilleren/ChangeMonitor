@@ -41,6 +41,16 @@ export interface Monitor {
   marketplace?: MarketplaceFeature
 }
 
+export interface MonitorTemplate {
+  name: string
+  httpHeaders?: Record<string, string[]>
+  useChrome: boolean
+  interval: number
+  generic?: GenericFeature
+  product?: ProductFeature
+  marketplace?: MarketplaceFeature
+}
+
 export interface PushoverConfig {
   apiToken: string
   userKey: string
@@ -53,6 +63,7 @@ export interface Notifiers {
 export interface Config {
   monitors: Monitor[]
   notifiers: Notifiers
+  templates?: MonitorTemplate[]
 }
 
 export interface Notification {

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import './app.css'
   import MonitorModal from './lib/MonitorModal.svelte'
-  import type { Config, Monitor, Notification } from './types'
+  import type { Config, Monitor, MonitorTemplate, Notification } from './types'
 
   let config: Config | null = $state(null)
   let savedConfig: string | null = $state(null)
@@ -18,12 +18,16 @@
   let editIndex = $state(-1)
   let editingMonitor: Monitor | null = $state(null)
 
+  let editingAsTemplate = $state(false)
+  let editTemplateIndex = $state(-1)
+
   onMount(async () => {
     try {
       const res = await fetch('/api/config')
       if (!res.ok) throw new Error(`Server returned ${res.status}`)
       config = await res.json() as Config
       config.monitors = config.monitors ?? []
+      config.templates = config.templates ?? []
       if (!config.notifiers) config.notifiers = {}
       if (!config.notifiers.pushover) config.notifiers.pushover = { apiToken: '', userKey: '' }
       savedConfig = JSON.stringify(config)
@@ -89,6 +93,64 @@
       config.monitors = [...config.monitors]
     }
     showModal = false
+  }
+
+  function onSaveAsTemplate(t: MonitorTemplate): void {
+    if (!config) return
+    config.templates = [...(config.templates ?? []), t]
+  }
+
+  function openFromTemplate(t: MonitorTemplate): void {
+    editingMonitor = {
+      name: '',
+      url: '',
+      useChrome: t.useChrome,
+      interval: t.interval,
+      httpHeaders: t.httpHeaders,
+      generic: t.generic ? JSON.parse(JSON.stringify(t.generic)) : undefined,
+      product: t.product ? JSON.parse(JSON.stringify(t.product)) : undefined,
+      marketplace: t.marketplace ? JSON.parse(JSON.stringify(t.marketplace)) : undefined,
+    }
+    editIndex = -1
+    showModal = true
+  }
+
+  function openEditTemplate(i: number): void {
+    if (!config) return
+    const tmpl = config.templates![i]
+    editingMonitor = {
+      name: tmpl.name,
+      url: '',
+      useChrome: tmpl.useChrome,
+      interval: tmpl.interval,
+      httpHeaders: tmpl.httpHeaders,
+      generic: tmpl.generic ? JSON.parse(JSON.stringify(tmpl.generic)) : undefined,
+      product: tmpl.product ? JSON.parse(JSON.stringify(tmpl.product)) : undefined,
+      marketplace: tmpl.marketplace ? JSON.parse(JSON.stringify(tmpl.marketplace)) : undefined,
+    }
+    editTemplateIndex = i
+    editingAsTemplate = true
+    editIndex = -1
+    showModal = true
+  }
+
+  function onTemplateEditSave(t: MonitorTemplate): void {
+    if (!config) return
+    config.templates![editTemplateIndex] = t
+    config.templates = [...config.templates!]
+    showModal = false
+    editingAsTemplate = false
+  }
+
+  function deleteTemplate(i: number): void {
+    if (!config) return
+    config.templates = (config.templates ?? []).filter((_, idx) => idx !== i)
+  }
+
+  function featureLabel(t: MonitorTemplate): string {
+    if (t.marketplace) return 'Marketplace'
+    if (t.product) return 'Product'
+    return 'Generic'
   }
 </script>
 
@@ -171,9 +233,45 @@
         {/if}
       </section>
 
+      <!-- Templates -->
+      <section class="card">
+        <div class="section-header">
+          <h2>Templates</h2>
+        </div>
+
+        {#if (config.templates ?? []).length === 0}
+          <p class="empty">No templates yet — use <strong>Save as Template</strong> in the monitor editor.</p>
+        {:else}
+          <div class="queries">
+            {#each (config.templates ?? []) as tmpl, i}
+              <div class="query-card">
+                <div class="query-header">
+                  <div class="monitor-name-url">
+                    <strong>{tmpl.name || 'Unnamed template'}</strong>
+                  </div>
+                  <div class="query-actions">
+                    <button class="btn btn-sm btn-secondary" onclick={() => openFromTemplate(tmpl)}>Use</button>
+                    <button class="btn btn-sm" onclick={() => openEditTemplate(i)}>Edit</button>
+                    <button class="btn btn-sm btn-danger" onclick={() => deleteTemplate(i)}>Delete</button>
+                  </div>
+                </div>
+                <div class="query-meta">
+                  <div class="tags">
+                    <span class="tag">Every {tmpl.interval}m</span>
+                    {#if tmpl.useChrome}
+                      <span class="tag tag-site">Chrome</span>
+                    {/if}
+                    <span class="tag">{featureLabel(tmpl)}</span>
+                  </div>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </section>
+
       <!-- Pushover Notifications -->
       <section class="card">
-        <h2>Pushover Notifications</h2>
         {#if config.notifiers.pushover}
         <div class="form-group">
           <label for="api-token">API Token</label>
@@ -204,7 +302,9 @@
 {#if showModal && editingMonitor}
   <MonitorModal
     monitor={editingMonitor}
+    templateMode={editingAsTemplate}
     onsave={onModalSave}
-    oncancel={() => (showModal = false)}
+    onsavetemplate={editingAsTemplate ? onTemplateEditSave : onSaveAsTemplate}
+    oncancel={() => { showModal = false; editingAsTemplate = false }}
   />
 {/if}

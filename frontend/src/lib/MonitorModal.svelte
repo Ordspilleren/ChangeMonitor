@@ -1,13 +1,15 @@
 <script lang="ts">
-  import type { Monitor } from '../types'
+  import type { Monitor, MonitorTemplate } from '../types'
 
   interface Props {
     monitor: Monitor
+    templateMode?: boolean
     onsave: (m: Monitor) => void
+    onsavetemplate?: (t: MonitorTemplate) => void
     oncancel: () => void
   }
 
-  let { monitor, onsave, oncancel }: Props = $props()
+  let { monitor, templateMode = false, onsave, onsavetemplate, oncancel }: Props = $props()
 
   let name = $state('')
   let url = $state('')
@@ -71,7 +73,7 @@
   let previewing = $state(false)
 
   let valid = $derived(
-    name.trim() !== '' && url.trim() !== '' && interval > 0 &&
+    name.trim() !== '' && (templateMode || url.trim() !== '') && interval > 0 &&
     (featureType !== 'product' || trackStock || trackPrice) &&
     (featureType !== 'marketplace' || mktSelector.trim() !== '')
   )
@@ -122,6 +124,56 @@
     onsave({
       name: name.trim(),
       url: url.trim(),
+      interval,
+      useChrome,
+      httpHeaders: Object.keys(httpHeaders).length ? httpHeaders : undefined,
+      generic,
+      product,
+      marketplace,
+    })
+  }
+
+  function saveAsTemplate(): void {
+    if (!onsavetemplate) return
+    const paths = selectorPaths.split('\n').map((s) => s.trim()).filter(Boolean)
+    const contains = filterContains.split('\n').map((s) => s.trim()).filter(Boolean)
+    const notContains = filterNotContains.split('\n').map((s) => s.trim()).filter(Boolean)
+    const httpHeaders: Record<string, string[]> = {}
+    for (const { key, value } of httpHeaderEntries) {
+      const k = key.trim()
+      if (!k) continue
+      if (!httpHeaders[k]) httpHeaders[k] = []
+      httpHeaders[k].push(value)
+    }
+    let generic = undefined
+    let product = undefined
+    let marketplace = undefined
+    if (featureType === 'product') {
+      product = {
+        trackStock,
+        trackPrice,
+        minPrice: trackPrice && minPrice !== undefined ? minPrice : undefined,
+        maxPrice: trackPrice && maxPrice !== undefined ? maxPrice : undefined,
+      }
+    } else if (featureType === 'marketplace') {
+      marketplace = {
+        selector: mktSelector.trim(),
+        linkSelector: mktLinkSelector.trim() || undefined,
+        titleSelector: mktTitleSelector.trim() || undefined,
+        priceSelector: mktPriceSelector.trim() || undefined,
+        keywords: mktKeywords.split('\n').map((s) => s.trim()).filter(Boolean),
+        maxPrice: mktMaxPrice,
+      }
+    } else {
+      generic = {
+        selector: { type: selectorType, paths },
+        filters: (contains.length || notContains.length) ? { contains, notContains } : undefined,
+        ignoreEmpty,
+      }
+    }
+    const templateName = templateMode ? (name.trim() || 'New template') : (name.trim() ? `${name.trim()} template` : 'New template')
+    onsavetemplate({
+      name: templateName,
       interval,
       useChrome,
       httpHeaders: Object.keys(httpHeaders).length ? httpHeaders : undefined,
@@ -227,7 +279,7 @@
 <div class="modal-backdrop">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" use:trapFocus>
     <div class="modal-header">
-      <h3 id="modal-title">{monitor.name ? 'Edit Monitor' : 'New Monitor'}</h3>
+      <h3 id="modal-title">{templateMode ? 'Edit Template' : (monitor.name ? 'Edit Monitor' : 'New Monitor')}</h3>
       <button class="close-btn" onclick={oncancel} aria-label="Close">×</button>
     </div>
 
@@ -511,9 +563,20 @@
       <button class="btn btn-secondary" onclick={preview} disabled={!canPreview || previewing}>
         {previewing ? 'Loading…' : 'Preview'}
       </button>
-      <button class="btn btn-primary" onclick={save} disabled={!valid}>
-        Save Monitor
-      </button>
+      {#if onsavetemplate && !templateMode}
+        <button class="btn btn-secondary" onclick={saveAsTemplate}>
+          Save as Template
+        </button>
+      {/if}
+      {#if templateMode}
+        <button class="btn btn-primary" onclick={saveAsTemplate} disabled={!valid}>
+          Save Template
+        </button>
+      {:else}
+        <button class="btn btn-primary" onclick={save} disabled={!valid}>
+          Save Monitor
+        </button>
+      {/if}
     </div>
   </div>
 </div>
