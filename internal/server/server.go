@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 
 	appcfg "github.com/Ordspilleren/ChangeMonitor/config"
@@ -27,6 +28,7 @@ func NewServer(config *appcfg.Config, configFile string, staticFS fs.FS, monitor
 	}
 	s.mux.HandleFunc("/api/config", s.handleConfig)
 	s.mux.HandleFunc("/api/preview", s.handlePreview)
+	s.mux.Handle("/debug/pprof/", http.DefaultServeMux)
 	s.mux.Handle("/", http.FileServer(http.FS(staticFS)))
 	return s
 }
