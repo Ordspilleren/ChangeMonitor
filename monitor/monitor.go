@@ -305,6 +305,9 @@ func (c *ChromeClient) GetContent(url string, headers http.Header) (io.ReadClose
 	ctx, cancel := chromedp.NewContext(c.allocCtx)
 	defer cancel()
 
+	ctx, cancelTimeout := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelTimeout()
+
 	var actions chromedp.Tasks
 	if len(headers) > 0 {
 		networkHeaders := make(network.Headers, len(headers))
