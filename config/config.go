@@ -40,6 +40,7 @@ type MonitorConfig struct {
 	HTTPHeaders http.Header `json:"httpHeaders,omitempty"`
 	UseChrome   bool        `json:"useChrome"`
 	Interval    int64       `json:"interval"`
+	Enabled     *bool       `json:"enabled,omitempty"`
 
 	Generic     *GenericFeatureConfig     `json:"generic,omitempty"`
 	Product     *ProductFeatureConfig     `json:"product,omitempty"`
@@ -123,12 +124,17 @@ func (c *Config) RuntimeMonitors() (monitor.Monitors, error) {
 
 // ToRuntime converts JSON config into a runtime monitor.
 func (mc *MonitorConfig) ToRuntime() (monitor.Monitor, error) {
+	enabled := true
+	if mc.Enabled != nil {
+		enabled = *mc.Enabled
+	}
 	m := monitor.Monitor{
 		Name:        mc.Name,
 		URL:         mc.URL,
 		HTTPHeaders: mc.HTTPHeaders,
 		UseChrome:   mc.UseChrome,
 		Interval:    time.Duration(mc.Interval),
+		Enabled:     enabled,
 	}
 
 	featureCount := 0

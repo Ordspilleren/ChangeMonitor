@@ -15,6 +15,7 @@
   let url = $state('')
   let interval = $state(0)
   let useChrome = $state(false)
+  let enabled = $state(true)
   let selectorType = $state('')
   let selectorPaths = $state('')
   let filterContains = $state('')
@@ -39,6 +40,7 @@
     url = monitor.url
     interval = monitor.interval
     useChrome = monitor.useChrome
+    enabled = monitor.enabled ?? true
     selectorType = monitor.generic?.selector?.type ?? ''
     selectorPaths = (monitor.generic?.selector?.paths ?? []).join('\n')
     filterContains = (monitor.generic?.filters?.contains ?? []).join('\n')
@@ -126,6 +128,7 @@
       url: url.trim(),
       interval,
       useChrome,
+      enabled,
       httpHeaders: Object.keys(httpHeaders).length ? httpHeaders : undefined,
       generic,
       product,
@@ -321,6 +324,14 @@
           <input type="checkbox" bind:checked={useChrome} />
           Use Chrome for JS-rendered pages
         </label>
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" bind:checked={enabled} />
+          Enabled
+        </label>
+        <span class="hint">When disabled, the monitor will not run and no notifications will be sent.</span>
       </div>
 
       <div class="form-group">

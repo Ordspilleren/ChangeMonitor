@@ -67,7 +67,7 @@
   }
 
   function openAdd(): void {
-    editingMonitor = { name: '', url: '', useChrome: false, interval: 5, generic: { selector: { type: '', paths: [] } } }
+    editingMonitor = { name: '', url: '', useChrome: false, interval: 5, enabled: true, generic: { selector: { type: '', paths: [] } } }
     editIndex = -1
     showModal = true
   }
@@ -106,6 +106,7 @@
       url: '',
       useChrome: t.useChrome,
       interval: t.interval,
+      enabled: true,
       httpHeaders: t.httpHeaders,
       generic: t.generic ? JSON.parse(JSON.stringify(t.generic)) : undefined,
       product: t.product ? JSON.parse(JSON.stringify(t.product)) : undefined,
@@ -206,12 +207,26 @@
                     <a class="monitor-url" href="{monitor.url}" target="_blank" rel="noopener noreferrer">{monitor.url}</a>
                   </div>
                   <div class="query-actions">
+                    <label class="toggle-label" title={monitor.enabled === false ? 'Enable monitor' : 'Disable monitor'}>
+                      <input
+                        type="checkbox"
+                        class="toggle-input"
+                        checked={monitor.enabled !== false}
+                        onchange={() => {
+                          if (config) config.monitors[i] = { ...monitor, enabled: monitor.enabled === false }
+                        }}
+                      />
+                      <span class="toggle-switch"></span>
+                    </label>
                     <button class="btn btn-sm" onclick={() => openEdit(i)}>Edit</button>
                     <button class="btn btn-sm btn-danger" onclick={() => deleteMonitor(i)}>Delete</button>
                   </div>
                 </div>
                 <div class="query-meta">
                   <div class="tags">
+                    {#if monitor.enabled === false}
+                      <span class="tag tag-disabled">Disabled</span>
+                    {/if}
                     <span class="tag">Every {monitor.interval}m</span>
                     {#if monitor.useChrome}
                       <span class="tag tag-site">Chrome</span>

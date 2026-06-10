@@ -36,6 +36,7 @@ export interface Monitor {
   httpHeaders?: Record<string, string[]>
   useChrome: boolean
   interval: number
+  enabled?: boolean
   generic?: GenericFeature
   product?: ProductFeature
   marketplace?: MarketplaceFeature

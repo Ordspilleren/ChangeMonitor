@@ -79,6 +79,7 @@ type Monitor struct {
 	UseChrome   bool
 	Interval    time.Duration
 	Feature     DetectionFeature
+	Enabled     bool
 
 	Notifier NotifierService
 	Storage  Storage
@@ -167,8 +168,10 @@ func (ms *MonitorService) Start() {
 		id := generateSHA1(m.Name)
 		activeIDs = append(activeIDs, id)
 		ms.monitors[i].init(ms)
-		if err := ms.monitors[i].start(&ms.wg); err != nil {
-			log.Printf("monitor: failed to start %q: %v", ms.monitors[i].Name, err)
+		if ms.monitors[i].Enabled {
+			if err := ms.monitors[i].start(&ms.wg); err != nil {
+				log.Printf("monitor: failed to start %q: %v", ms.monitors[i].Name, err)
+			}
 		}
 	}
 	if err := ms.storage.Cleanup(activeIDs); err != nil {
